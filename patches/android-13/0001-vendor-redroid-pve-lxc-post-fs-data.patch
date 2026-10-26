@@ -1,0 +1,46 @@
+From 34f541106f22233eeefdd59d845bca20c1932955 Mon Sep 17 00:00:00 2001
+From: huangqw <hqw700@qq.com>
+Date: Mon, 26 Oct 2026 12:33:18 +0000
+Subject: [PATCH] feat(pve): adapt post-fs-data for PVE native LXC (proc
+ unmount for LXCFS, /dev/tty creation)
+
+---
+ post-fs-data.redroid.sh | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/post-fs-data.redroid.sh b/post-fs-data.redroid.sh
+index 67cd1b4..236a3a3 100755
+--- a/post-fs-data.redroid.sh
++++ b/post-fs-data.redroid.sh
+@@ -1,5 +1,27 @@
+ #!/system/bin/sh
+ 
+-## enable `memfd` if `ashmem` missing
+-## memfd is disabled in post-fs-data (init.rc)
++## 1. 开启 memfd 支持 (内核 5.18+ ashmem 移除兼容)
+ [ -c /dev/ashmem ] || setprop sys.use_memfd 1
++
++## 2. 卸载重复覆盖挂载的 devpts，确保 /dev/ptmx 与 /dev/pts 配对，完美支持 adb shell
++while [ $(grep -c " /dev/pts " /proc/mounts 2>/dev/null || echo 0) -gt 1 ]; do
++    /system/bin/umount /dev/pts 2>/dev/null || break
++done
++
++## 3. 卸载重复覆盖挂载的 /proc，恢复 LXCFS 虚拟化 (精准呈现分配内存与 cgroup 配额)
++while [ $(grep -c " /proc " /proc/mounts 2>/dev/null || echo 0) -gt 1 ]; do
++    /system/bin/umount -l /proc 2>/dev/null || break
++done
++
++## 4. 强制触发 linkerconfig 生成完整版 APEX 命名空间配置 (178KB)
++if [ -x /apex/com.android.runtime/bin/linkerconfig ]; then
++    /apex/com.android.runtime/bin/linkerconfig --target /linkerconfig 2>/dev/null || true
++fi
++
++## 5. 确保 /dev/tty 存在，赋予完整的 job control 与 controlling tty 支持 (支持 adb shell 运行 top/交互程序)
++if [ ! -c /dev/tty ]; then
++    /system/bin/mknod -m 666 /dev/tty c 5 0 2>/dev/null || true
++fi
++
++## 6. 启动原生控制台交互终端服务 (/dev/console)
++start console 2>/dev/null || true
+-- 
+2.34.1

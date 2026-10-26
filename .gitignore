@@ -1,0 +1,12 @@
+# PVE Template archives (use GitHub Releases instead)
+*.tar
+*.tar.gz
+*.tar.zst
+*.img
+out/
+.tmp*
+
+# OS artifacts
+.DS_Store
+*.swp
+*~

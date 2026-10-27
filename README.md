@@ -185,13 +185,10 @@ repo sync -c -j16
 git clone https://github.com/remote-android/redroid-patches.git
 ./redroid-patches/apply-patch.sh .
 
-# 3. 打入本项目 PVE 与非特权适配补丁 (patches/android-13/)
-git -C vendor/redroid apply /path/to/redroid-pve/patches/android-13/0001-vendor-redroid-pve-lxc-post-fs-data.patch
-git -C system/core apply /path/to/redroid-pve/patches/android-13/0002-system-core-unprivileged-container-adaptation.patch
-git -C system/bpf apply /path/to/redroid-pve/patches/android-13/0003-system-bpf-unprivileged-adaptation.patch
-git -C system/memory/lmkd apply /path/to/redroid-pve/patches/android-13/0004-system-memory-lmkd-unprivileged-adaptation.patch
-git -C frameworks/libs/net apply /path/to/redroid-pve/patches/android-13/0005-frameworks-libs-net-bpfmap-abort-fix.patch
-git -C external/toybox apply /path/to/redroid-pve/patches/android-13/0006-external-toybox-accurate-cpu-mem-for-containers.patch
+# 3. 打入本项目 PVE 与非特权适配补丁 (统一自动化脚本，支持自动探测与幂等跳过)
+git clone https://github.com/hqw700/redroid-pve.git
+./redroid-pve/apply-patch.sh .
+# 注：如需还原卸载补丁，可执行: ./redroid-pve/apply-patch.sh -R .
 
 # 4. 编译系统
 source build/envsetup.sh

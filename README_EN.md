@@ -173,13 +173,10 @@ repo sync -c -j16
 git clone https://github.com/remote-android/redroid-patches.git
 ./redroid-patches/apply-patch.sh .
 
-# 3. Apply redroid-pve unprivileged adaptation patches
-git -C vendor/redroid apply /path/to/redroid-pve/patches/android-13/0001-vendor-redroid-pve-lxc-post-fs-data.patch
-git -C system/core apply /path/to/redroid-pve/patches/android-13/0002-system-core-unprivileged-container-adaptation.patch
-git -C system/bpf apply /path/to/redroid-pve/patches/android-13/0003-system-bpf-unprivileged-adaptation.patch
-git -C system/memory/lmkd apply /path/to/redroid-pve/patches/android-13/0004-system-memory-lmkd-unprivileged-adaptation.patch
-git -C frameworks/libs/net apply /path/to/redroid-pve/patches/android-13/0005-frameworks-libs-net-bpfmap-abort-fix.patch
-git -C external/toybox apply /path/to/redroid-pve/patches/android-13/0006-external-toybox-accurate-cpu-mem-for-containers.patch
+# 3. Apply redroid-pve unprivileged adaptation patches (unified script with auto-detection & idempotency)
+git clone https://github.com/hqw700/redroid-pve.git
+./redroid-pve/apply-patch.sh .
+# Note: To revert patches, run: ./redroid-pve/apply-patch.sh -R .
 
 # 4. Build system
 source build/envsetup.sh

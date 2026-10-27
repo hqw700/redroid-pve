@@ -19,12 +19,12 @@
 
 ## 1. 架构特性与收益对比
 
-在传统方案中，在 PVE 运行 ReDroid 需要采用 **Docker-in-LXC (PVE ➔ Ubuntu LXC ➔ Docker ➔ ReDroid)** 嵌套架构。本项目通过重构根文件系统、自愈 APEX 动态链接、攻关 User Namespace 隔离并提供宿主机安全加固 Hook，实现了 **Android 直接作为 PVE 原生容器（一等公民）** 运行，且**业内首创原生支持非特权模式 (`unprivileged: 1`)**：
+在传统方案中，在 PVE 运行 ReDroid 需要采用 **Docker-in-LXC (PVE ➔ Ubuntu LXC ➔ Docker ➔ ReDroid)** 嵌套架构。本项目通过重构根文件系统、自愈 APEX 动态链接、User Namespace 隔离与宿主机安全加固 Hook，实现了 **Android 直接作为 PVE 原生容器运行**，并支持以**非特权模式 (`unprivileged: 1`)** 启动：
 
 | 评估维度 | 传统 Docker-in-LXC 嵌套方案 | 本项目：PVE 原生容器方案 (`redroid-pve`) |
 | :--- | :--- | :--- |
-| **拓扑层级** | PVE ➔ Ubuntu CT ➔ Docker ➔ ReDroid (3层) | **PVE ➔ ReDroid CT (1层，纯原生)** |
-| **安全隔离** | 必须 `--privileged` 运行，具备全部宿主能力 | **原生支持非特权模式 (`unprivileged: 1`)，杜绝逃逸** |
+| **拓扑层级** | PVE ➔ Ubuntu CT ➔ Docker ➔ ReDroid (3层) | **PVE ➔ ReDroid CT (1层)** |
+| **安全隔离** | 必须 `--privileged` 运行，具备全部宿主能力 | **支持非特权模式 (`unprivileged: 1`)，降低逃逸风险** |
 | **冷启动耗时** | 约 30 ~ 50 秒 (需先拉起 Ubuntu 守护进程与 dockerd) | **约 5 秒 (直接拉起 Android /init 渲染至桌面)** |
 | **内存底噪开销** | 额外浪费 1.5GB+ 供 Ubuntu 宿主与 Docker 守护驻留 | **零多余驻留内存，内存多开密度提升 30%+** |
 | **网络模式** | 繁琐的 Docker NAT 端口映射 (`-p 5001:5555...`) | **局域网原生独立 IP (基于 vmbr0 桥接，5555 直连)** |

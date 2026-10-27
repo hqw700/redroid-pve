@@ -21,12 +21,12 @@
 
 In traditional deployments, running ReDroid on Proxmox VE requires **Docker-in-LXC nesting** (`PVE ➔ Ubuntu LXC ➔ Docker Daemon ➔ ReDroid`). 
 
-`redroid-pve` eliminates this overhead entirely by running **Android directly as a first-class citizen on PVE native LXC**, and is the **first in the industry to support unprivileged mode (`unprivileged: 1`)**:
+`redroid-pve` eliminates this overhead entirely by running **Android directly as a native PVE LXC container**, with support for **unprivileged mode (`unprivileged: 1`)**:
 
 | Metric | Traditional Docker-in-LXC | This Project: Native PVE LXC (`redroid-pve`) |
 | :--- | :--- | :--- |
-| **Topology Layers** | PVE ➔ Ubuntu CT ➔ Docker ➔ ReDroid (3 layers) | **PVE ➔ ReDroid CT (1 layer, pure native)** |
-| **Security Isolation** | Requires `--privileged` mode (risk of container escape) | **Native support for Unprivileged Mode (`unprivileged: 1`)** |
+| **Topology Layers** | PVE ➔ Ubuntu CT ➔ Docker ➔ ReDroid (3 layers) | **PVE ➔ ReDroid CT (1 layer)** |
+| **Security Isolation** | Requires `--privileged` mode (risk of container escape) | **Support for Unprivileged Mode (`unprivileged: 1`)** |
 | **Cold Boot Time** | ~30 - 50 seconds (booting Ubuntu + dockerd first) | **~5 seconds (direct Android /init to desktop)** |
 | **RAM Overhead** | Wastes 1.5GB+ per VM for Ubuntu & Docker daemons | **Zero wasted RAM, container density increases 30%+** |
 | **Networking** | Complex Docker NAT port mapping (`-p 5001:5555`) | **Native independent LAN IP via vmbr0 (direct port 5555)** |

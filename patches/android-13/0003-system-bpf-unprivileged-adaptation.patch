@@ -1,0 +1,34 @@
+diff --git a/bpfloader/BpfLoader.cpp b/bpfloader/BpfLoader.cpp
+index 331a6b3..9b7286d 100644
+--- a/bpfloader/BpfLoader.cpp
++++ b/bpfloader/BpfLoader.cpp
+@@ -207,7 +207,7 @@ int main(int argc, char** argv) {
+             android::bpf::createMap(BPF_MAP_TYPE_ARRAY, sizeof(key), sizeof(value), 2, 0));
+     if (android::bpf::writeToMapEntry(map, &key, &value, BPF_ANY)) {
+         ALOGE("Critical kernel bug - failure to write into index 1 of 2 element bpf map array.");
+-        return 1;
++        // return 1;
+     }
+ 
+     if (android::base::SetProperty("bpf.progs_loaded", "1") == false) {
+diff --git a/bpfloader/bpfloader.rc b/bpfloader/bpfloader.rc
+index 0d92cd8..a3ce58b 100644
+--- a/bpfloader/bpfloader.rc
++++ b/bpfloader/bpfloader.rc
+@@ -65,7 +65,7 @@ service bpfloader /system/bin/bpfloader
+     #    from the default (wembley: 64kB) to the maximum (1M) per log buffer.
+     #    Otherwise buffer will overflow before you manage to dump it and you'll get useless logs.
+     #
+-    # 2. comment out 'reboot_on_failure reboot,bpfloader-failed' below
++    # 2. comment out '# reboot_on_failure reboot,bpfloader-failed' below
+     # 3. rebuild/reflash/reboot
+     # 4. as the device is booting up capture bpfloader logs via:
+     #    adb logcat -s 'bpfloader:*' 'LibBpfLoader:*'
+@@ -81,6 +81,6 @@ service bpfloader /system/bin/bpfloader
+     #    'cannot prove return value is 0 or 1' or 'unsupported / unknown operation / helper',
+     #    'invalid bpf_context access', etc.
+     #
+-    reboot_on_failure reboot,bpfloader-failed
++    # reboot_on_failure reboot,bpfloader-failed
+     # we're not really updatable, but want to be able to load bpf programs shipped in apexes
+     updatable

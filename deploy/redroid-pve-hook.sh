@@ -1,6 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # ReDroid PVE LXC 极简安全加固与环境自愈 Hook (纯净开源版)
+# 支持模式：非特权容器 (unprivileged: 1) 与 特权容器 (unprivileged: 0)
 # ==============================================================================
 
 HOOK_TYPE="$3"
@@ -36,7 +37,7 @@ if [ -n "${LXC_ROOTFS_MOUNT}" ] && [ -d "${LXC_ROOTFS_MOUNT}" ]; then
         mount --bind "$FAKE_POWER_STATE" "${LXC_ROOTFS_MOUNT}/sys/power/state" 2>/dev/null || true
     fi
 
-    # 预创建基础 /dev 字符设备节点供 stdio 与 early-boot 使用
+    # 预创建基础 /dev 字符设备节点供 stdio 与 early-boot 使用 (特权模式直接生效；非特权模式由 bind mount 覆盖)
     mkdir -p "${LXC_ROOTFS_MOUNT}/dev" 2>/dev/null || true
     [ ! -c "${LXC_ROOTFS_MOUNT}/dev/null" ] && mknod -m 666 "${LXC_ROOTFS_MOUNT}/dev/null" c 1 3 2>/dev/null || true
     [ ! -c "${LXC_ROOTFS_MOUNT}/dev/zero" ] && mknod -m 666 "${LXC_ROOTFS_MOUNT}/dev/zero" c 1 5 2>/dev/null || true

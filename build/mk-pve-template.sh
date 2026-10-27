@@ -57,6 +57,11 @@ cd "${TMP_ROOTFS}"
 # 创建标准挂载点目录（etc 默认为系统软链接，无需创建）
 mkdir -p data apex ipc dev sys proc mnt sbin data_mirror metadata cache storage
 
+# 确保 init.rc 中 binderfs 挂载去除了 stats=global 限制 (保证非特权 User Namespace 原生挂载)
+if [ -f system/etc/init/hw/init.rc ]; then
+    sed -i 's/mount binder binder \/dev\/binderfs stats=global/mount binder binder \/dev\/binderfs/' system/etc/init/hw/init.rc 2>/dev/null || true
+fi
+
 # 保持 AOSP 原生 Bionic Linker 软链接指向 /apex/com.android.runtime/bin/linker* (勿覆写为 bootstrap)
 
 # 确保 vendor/bin/post-fs-data.redroid.sh 具备 APEX LinkerConfig 自愈逻辑

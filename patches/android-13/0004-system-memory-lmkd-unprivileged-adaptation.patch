@@ -1,0 +1,14 @@
+diff --git a/lmkd.cpp b/lmkd.cpp
+index 6405187..e46ccd3 100644
+--- a/lmkd.cpp
++++ b/lmkd.cpp
+@@ -3482,7 +3482,8 @@ static int init(void) {
+         }
+     } else {
+         if (!init_monitors()) {
+-            return -1;
++            ALOGW("init_monitors failed, running in basic mode without kernel memory pressure monitoring (container mode)");
++            // return -1;
+         }
+         /* let the others know it does support reporting kills */
+         property_set("sys.lmk.reportkills", "1");

@@ -1,8 +1,8 @@
 # ReDroid for PVE (redroid-pve)
 
 <p align="center">
-  <b>Native Android 13 (AOSP) Privileged Container Solution for Proxmox VE (PVE)</b><br>
-  5s Cold Boot · Native LAN IP · Host Safety Hardening · Zero Docker Nesting · Instant Snapshots
+  <b>Native Android 13 (AOSP) Container Solution for Proxmox VE (PVE)</b><br>
+  5s Cold Boot · Native LAN IP · Unprivileged Mode Support · Zero Docker Nesting · Instant Snapshots
 </p>
 
 <p align="center">
@@ -21,11 +21,12 @@
 
 In traditional deployments, running ReDroid on Proxmox VE requires **Docker-in-LXC nesting** (`PVE ➔ Ubuntu LXC ➔ Docker Daemon ➔ ReDroid`). 
 
-`redroid-pve` eliminates this overhead entirely by running **Android directly as a first-class citizen on PVE native LXC**:
+`redroid-pve` eliminates this overhead entirely by running **Android directly as a first-class citizen on PVE native LXC**, and is the **first in the industry to support unprivileged mode (`unprivileged: 1`)**:
 
 | Metric | Traditional Docker-in-LXC | This Project: Native PVE LXC (`redroid-pve`) |
 | :--- | :--- | :--- |
-| **Topology Layers** | PVE ➔ Ubuntu CT ➔ Docker ➔ ReDroid (3 layers) | **PVE ➔ ReDroid CT (1 layer)** |
+| **Topology Layers** | PVE ➔ Ubuntu CT ➔ Docker ➔ ReDroid (3 layers) | **PVE ➔ ReDroid CT (1 layer, pure native)** |
+| **Security Isolation** | Requires `--privileged` mode (risk of container escape) | **Native support for Unprivileged Mode (`unprivileged: 1`)** |
 | **Cold Boot Time** | ~30 - 50 seconds (booting Ubuntu + dockerd first) | **~5 seconds (direct Android /init to desktop)** |
 | **RAM Overhead** | Wastes 1.5GB+ per VM for Ubuntu & Docker daemons | **Zero wasted RAM, container density increases 30%+** |
 | **Networking** | Complex Docker NAT port mapping (`-p 5001:5555`) | **Native independent LAN IP via vmbr0 (direct port 5555)** |
@@ -68,12 +69,15 @@ cd /root/redroid-pve
 
 ### Step 3: Create & Launch Container
 
-Run the creation command with your desired VMID, static IP/CIDR, and gateway:
+Run the creation command with your desired VMID, static IP/CIDR, and gateway (**defaults to unprivileged secure mode**):
 
 ```bash
-# Syntax: pve-create-redroid <VMID> <StaticIP/CIDR> <Gateway>
-# Example: CT 201 with IP 192.168.100.201, Gateway 192.168.100.1
+# Syntax: pve-create-redroid <VMID> <StaticIP/CIDR> <Gateway> [Cores] [RAM_MB] [Swap_MB] [Disk_GB] [Template] [Unprivileged]
+# Example 1: Create CT 201 in Unprivileged Mode (unprivileged: 1, default)
 pve-create-redroid 201 192.168.100.201/24 192.168.100.1
+
+# Example 2: Create CT 201 in Privileged Mode (unprivileged: 0, for special kernel pass-through)
+pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 "" 0
 ```
 
 The container will automatically initialize and reach `sys.boot_completed=1` in **~5 seconds**!
@@ -92,13 +96,31 @@ adb connect 192.168.100.201:5555
 scrcpy -s 192.168.100.201:5555
 ```
 
+<p align="center">
+  <img src="assets/settings_screen.png" width="45%" alt="Android 13 Settings (Unprivileged Mode)" />
+  <img src="assets/unprivileged_screen.png" width="45%" alt="Android 13 Launcher (Unprivileged Mode)" />
+</p>
+
 ---
 
-## 3. Boot Parameter Customization
+## 3. Unprivileged Mode (`unprivileged: 1`) Deep Dive
 
-Boot arguments are configured via **`lxc.init.cmd`** in `/etc/pve/lxc/<VMID>.conf`.
+Traditionally, Android containers required `--privileged` due to host kernel security barriers. This project solved four fundamental challenges to achieve production-grade unprivileged execution:
 
-Edit the configuration file (`nano /etc/pve/lxc/<VMID>.conf`) and reboot the container (`pct reboot <VMID>`):
+1. **Native BinderFS under User Namespace (`0002-patch`)**:
+   Linux kernels 5.0+ allow unprivileged userns mounting of `binderfs`. However, AOSP's `init.rc` hardcodes `stats=global` which requires global `CAP_SYS_ADMIN`. Removing this option allows the container to independently create and manage `binder`, `hwbinder`, and `vndbinder`.
+2. **Eliminating Priority Scheduling Blocks (`RLIMIT_NICE: 40`)**:
+   Android `SystemServer` elevates thread priorities to negative values (e.g. -2, -10). Without permission, Linux throws `SecurityException`. Configuring `lxc.prlimit.nice: 40` provides the required negative nice quota cleanly.
+3. **Preventing SIGBUS Crashes on Property Areas (`autodev 128MB`)**:
+   Android Bionic property areas allocate 128KB per context file. LXC's default 500KB tmpfs causes a memory write page fault `SIGBUS (signal 7)` on the 5th context. Providing a 128MB tmpfs completely resolves this.
+4. **Fixing BpfMap Constructor Hardcoded `abort()` (`0005-patch`)**:
+   When host eBPF maps cannot be accessed inside an unprivileged container, upstream libraries have fallback logic, but `BpfMap.h` hardcoded `if (mMapFd < 0) abort();`. Replacing it with a safe return allows `gpuservice` and `system_server` to boot smoothly without eBPF.
+
+---
+
+## 4. Boot Parameter Customization
+
+Boot arguments are configured via **`lxc.init.cmd`** in `/etc/pve/lxc/<VMID>.conf`:
 
 ```ini
 lxc.init.cmd: /init androidboot.hardware=redroid androidboot.redroid_gpu_mode=guest androidboot.redroid_width=1080 androidboot.redroid_height=1920 androidboot.redroid_dpi=320 ro.boot.redroid_fps=60
@@ -106,44 +128,40 @@ lxc.init.cmd: /init androidboot.hardware=redroid androidboot.redroid_gpu_mode=gu
 
 | Parameter | Description | Recommended Values |
 | :--- | :--- | :--- |
-| **`androidboot.hardware`** | Hardware target identifier (**Required**) | `redroid` |
-| **`androidboot.redroid_gpu_mode`** | GPU rendering mode | **`guest`**: CPU software rasterizer (SwiftShader, zero GPU dependencies, highly reliable)<br>**`host`**: Host GPU hardware acceleration (requires `/dev/dri` pass-through) |
+| **`androidboot.hardware`** | **Required**, hardware platform | `redroid` |
+| **`androidboot.redroid_gpu_mode`** | Graphics rendering mode | **`guest`**: CPU software rendering (SwiftShader, 100% reliable)<br>**`host`**: GPU hardware passthrough (requires `/dev/dri`) |
 | **`androidboot.redroid_width`** | Screen width | `1080`, `720` |
 | **`androidboot.redroid_height`** | Screen height | `1920`, `1280` |
-| **`androidboot.redroid_dpi`** | Display pixel density DPI | `320`, `480`, `240` |
-| **`ro.boot.redroid_fps`** | Target frame rate | `60`, `30` |
+| **`androidboot.redroid_dpi`** | Screen DPI | `320`, `480`, `240` |
+| **`ro.boot.redroid_fps`** | Target FPS | `60`, `30` |
 
 ---
 
-## 4. Key Security Protections (Why Hooks are Crucial)
+## 5. Security & Isolation Hooks
 
-Running Android inside a privileged container shares `/sys` with the host. Two major system conflicts are resolved by our hooks:
-
-1. **Protecting PVE Cluster Filesystem (`pmxcfs`)**:
-   * Proxmox VE's `/etc/pve` cluster configuration operates over FUSE (`pmxcfs`).
-   * Android's `vold` daemon runs `AbortFuseConnections()` during boot and shutdown, writing `1` to all entries in `/sys/fs/fuse/connections`.
-   * **Protection**: `redroid-pve-hook.sh` mounts a read-only 1MB tmpfs over `/sys/fs/fuse` inside the container, preventing `vold` from ever accessing or severing the host's FUSE connections.
-2. **Preventing Physical Host Sleep/Suspension**:
-   * Android's `system_suspend` service writes `mem` to `/sys/power/state` when screen idles. In a privileged container, this would put the entire physical PVE server to sleep!
-   * **Protection**: The hook bind-mounts a fake dummy file over `/sys/power/state`, neutralizing sleep commands.
-3. **Touch Input & Network Self-Healing**:
-   * Automatically creates `/dev/uinput` (mode 0666) for `scrcpy` mouse/touch events.
-   * Injects static IP via `nsenter` in `post-start`, preventing Android's `IpClient` NPE crash loop.
+1. **PVE Cluster Filesystem (`pmxcfs`) Protection**:
+   * Android `vold` scans `/sys/fs/fuse/connections` and writes `1` to abort connections upon shutdown or initialization.
+   * `redroid-pve-hook.sh` overrides `/sys/fs/fuse` with a 1MB read-only tmpfs.
+2. **Preventing Host Sleep**:
+   * Android `system_suspend` writes `mem` to `/sys/power/state`. Hook binds it to a dummy virtual file.
+3. **Input & Network Self-healing**:
+   * Automatically prepares `/dev/uinput` for input control.
+   * Injects network routes via `nsenter` to avoid `IpClient` NPE crashes.
 
 ---
 
-## 5. Roadmap
+## 6. Multi-version & Multi-arch Roadmap
 
-| Android Version | API Level | x86_64 Arch | ARM64 Arch | Status |
+| Android Version | API Level | x86_64 | ARM64 | Status |
 | :---: | :---: | :---: | :---: | :---: |
-| **Android 13** | API 33 | ✅ Supported | 🔄 Planned | **GA Stable (Recommended)** |
-| **Android 11** | API 30 | 🔄 In Progress | 🔄 Planned | Ideal for ultra-low memory usage |
-| **Android 14** | API 34 | 🔄 Planned | 🔄 Planned | High API compatibility |
-| **Android 15** | API 35 | ⏳ Evaluating | ⏳ Evaluating | Bleeding-edge features |
+| **Android 13** | API 33 | ✅ Supported (Unprivileged) | 🔄 Planned | **GA Stable (Recommended)** |
+| **Android 11** | API 30 | 🔄 Adapting | 🔄 Planned | Best for ultra-low memory |
+| **Android 14** | API 34 | 🔄 Planned | 🔄 Planned | Modern compatibility |
+| **Android 15** | API 35 | ⏳ Evaluating | ⏳ Evaluating | Cutting edge |
 
 ---
 
-## 6. Building from Source
+## 7. Building from Source
 
 ```bash
 # 1. Initialize AOSP 13.0.0_r82
@@ -151,25 +169,29 @@ repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.
 git clone https://github.com/remote-android/local_manifests.git .repo/local_manifests -b 13.0.0
 repo sync -c -j16
 
-# 2. Apply upstream redroid patches
+# 2. Apply upstream ReDroid patches
 git clone https://github.com/remote-android/redroid-patches.git
 ./redroid-patches/apply-patch.sh .
 
-# 3. Apply redroid-pve adaptation patch
+# 3. Apply redroid-pve unprivileged adaptation patches
 git -C vendor/redroid apply /path/to/redroid-pve/patches/android-13/0001-vendor-redroid-pve-lxc-post-fs-data.patch
+git -C system/core apply /path/to/redroid-pve/patches/android-13/0002-system-core-unprivileged-container-adaptation.patch
+git -C system/bpf apply /path/to/redroid-pve/patches/android-13/0003-system-bpf-unprivileged-adaptation.patch
+git -C system/memory/lmkd apply /path/to/redroid-pve/patches/android-13/0004-system-memory-lmkd-unprivileged-adaptation.patch
+git -C frameworks/libs/net apply /path/to/redroid-pve/patches/android-13/0005-frameworks-libs-net-bpfmap-abort-fix.patch
 
-# 4. Build
+# 4. Build system
 source build/envsetup.sh
 lunch redroid_x86_64-userdebug
-m -j8
+m -j$(nproc)
 
-# 5. Package PVE template
+# 5. Package PVE template (.tar.zst)
 ./build/mk-pve-template.sh
 ```
 
 ---
 
-## 7. License
+## 8. License
 
-This project is licensed under the [Apache-2.0 License](LICENSE).
+Apache-2.0 License. See [LICENSE](LICENSE).
 ReDroid is an open-source project by [remote-android](https://github.com/remote-android).

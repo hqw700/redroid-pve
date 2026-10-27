@@ -1,0 +1,96 @@
+diff --git a/init/security.cpp b/init/security.cpp
+index 970696e..d4f8f4a 100644
+--- a/init/security.cpp
++++ b/init/security.cpp
+@@ -125,8 +125,8 @@ Result<void> SetMmapRndBitsAction(const BuiltinArguments&) {
+     LOG(ERROR) << "Unknown architecture";
+ #endif
+ 
+-    LOG(FATAL) << "Unable to set adequate mmap entropy value!";
+-    return Error();
++    LOG(WARNING) << "Unable to set adequate mmap entropy value (ignored for container)!";
++    return {};
+ }
+ 
+ #define KPTR_RESTRICT_PATH "/proc/sys/kernel/kptr_restrict"
+@@ -140,8 +140,8 @@ Result<void> SetKptrRestrictAction(const BuiltinArguments&) {
+     std::string path = KPTR_RESTRICT_PATH;
+ 
+     if (!SetHighestAvailableOptionValue(path, KPTR_RESTRICT_MINVALUE, KPTR_RESTRICT_MAXVALUE)) {
+-        LOG(FATAL) << "Unable to set adequate kptr_restrict value!";
+-        return Error();
++        LOG(WARNING) << "Unable to set adequate kptr_restrict value (ignored for container)!";
++        return {};
+     }
+     return {};
+ }
+diff --git a/init/service_utils.cpp b/init/service_utils.cpp
+index d19f5ee..1319594 100644
+--- a/init/service_utils.cpp
++++ b/init/service_utils.cpp
+@@ -252,8 +252,7 @@ Result<void> SetProcessAttributes(const ProcessAttributes& attr) {
+ 
+     for (const auto& rlimit : attr.rlimits) {
+         if (setrlimit(rlimit.first, &rlimit.second) == -1) {
+-            return ErrnoErrorf("setrlimit({}, {{rlim_cur={}, rlim_max={}}}) failed", rlimit.first,
+-                               rlimit.second.rlim_cur, rlimit.second.rlim_max);
++            PLOG(WARNING) << "setrlimit failed (ignored for container)";
+         }
+     }
+ 
+@@ -273,7 +272,7 @@ Result<void> SetProcessAttributes(const ProcessAttributes& attr) {
+ 
+     if (attr.priority != 0) {
+         if (setpriority(PRIO_PROCESS, 0, attr.priority) != 0) {
+-            return ErrnoError() << "setpriority failed";
++            PLOG(WARNING) << "setpriority failed (ignored for container)";
+         }
+     }
+     return {};
+diff --git a/init/uevent_listener.cpp b/init/uevent_listener.cpp
+index 7cd396a..3a1daa4 100644
+--- a/init/uevent_listener.cpp
++++ b/init/uevent_listener.cpp
+@@ -89,10 +89,10 @@ static void ParseEvent(const char* msg, Uevent* uevent) {
+ UeventListener::UeventListener(size_t uevent_socket_rcvbuf_size) {
+     device_fd_.reset(uevent_open_socket(uevent_socket_rcvbuf_size, true));
+     if (device_fd_ == -1) {
+-        LOG(FATAL) << "Could not open uevent socket";
++        LOG(ERROR) << "Could not open uevent socket (unprivileged container)!";
++    } else {
++        fcntl(device_fd_, F_SETFL, O_NONBLOCK);
+     }
+-
+-    fcntl(device_fd_, F_SETFL, O_NONBLOCK);
+ }
+ 
+ ReadUeventResult UeventListener::ReadUevent(Uevent* uevent) const {
+diff --git a/libcutils/uevent.cpp b/libcutils/uevent.cpp
+index 40bbd5c..5caab80 100644
+--- a/libcutils/uevent.cpp
++++ b/libcutils/uevent.cpp
+@@ -117,10 +117,7 @@ int uevent_open_socket(int buf_sz, bool passcred) {
+      * case we don't have CAP_NET_ADMIN. This is the case, for example, for
+      * healthd. */
+     if (buf_sz_readback < 2 * buf_sz) {
+-        if (setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &buf_sz, sizeof(buf_sz)) < 0) {
+-            close(s);
+-            return -1;
+-        }
++        setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &buf_sz, sizeof(buf_sz));
+     }
+ 
+     setsockopt(s, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index 6851f62..31d7884 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -241,7 +241,7 @@ on init
+ 
+     # Mount binderfs
+     mkdir /dev/binderfs
+-    mount binder binder /dev/binderfs stats=global
++    mount binder binder /dev/binderfs
+     chmod 0755 /dev/binderfs
+     exec -- /vendor/bin/binder_alloc /dev/binderfs/binder-control binder hwbinder vndbinder
+ 

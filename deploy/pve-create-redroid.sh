@@ -84,6 +84,8 @@ if [ "${UNPRIVILEGED}" = "1" ]; then
     # 非特权模式 (Unprivileged)
     cat << EOF >> /etc/pve/lxc/${VMID}.conf
 lxc.prlimit.nice: 40
+lxc.cgroup2.devices.allow: c 226:* rwm
+lxc.cgroup2.devices.allow: c 248:* rwm
 lxc.mount.entry: /dev/null dev/null none bind,create=file 0 0
 lxc.mount.entry: /dev/zero dev/zero none bind,create=file 0 0
 lxc.mount.entry: /dev/random dev/random none bind,create=file 0 0
@@ -92,8 +94,9 @@ lxc.mount.entry: /dev/kmsg dev/kmsg none bind,create=file 0 0
 lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir 0 0
 lxc.mount.entry: /dev/dma_heap dev/dma_heap none bind,optional,create=dir 0 0
 EOF
-    # 宿主放行 kmsg 读写权限
+    # 宿主放行 kmsg 与 GPU 读写权限给容器普通映射用户
     chmod 666 /dev/kmsg 2>/dev/null || true
+    chmod 666 /dev/dri/* 2>/dev/null || true
 else
     # 特权模式 (Privileged)
     cat << EOF >> /etc/pve/lxc/${VMID}.conf

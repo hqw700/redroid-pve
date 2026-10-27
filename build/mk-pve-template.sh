@@ -62,6 +62,13 @@ if [ -f system/etc/init/hw/init.rc ]; then
     sed -i 's/mount binder binder \/dev\/binderfs stats=global/mount binder binder \/dev\/binderfs/' system/etc/init/hw/init.rc 2>/dev/null || true
 fi
 
+# 在 mksh 全局配置中关闭 TOSTOP，防止交互式控制台运行 top 等全屏程序时触发 SIGTTOU 挂起
+if [ -f system/etc/mkshrc ]; then
+    if ! grep -q "stty -tostop" system/etc/mkshrc; then
+        echo "stty -tostop 2>/dev/null || true" >> system/etc/mkshrc
+    fi
+fi
+
 # 保持 AOSP 原生 Bionic Linker 软链接指向 /apex/com.android.runtime/bin/linker* (勿覆写为 bootstrap)
 
 # 确保 vendor/bin/post-fs-data.redroid.sh 具备 APEX LinkerConfig 自愈逻辑

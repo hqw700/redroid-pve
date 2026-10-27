@@ -8,7 +8,11 @@ set -e
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AOSP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [ -d "${SCRIPT_DIR}/out/target/product/redroid_x86_64" ] || [ -f "${SCRIPT_DIR}/build/make/core/main.mk" ]; then
+    AOSP_DIR="${SCRIPT_DIR}"
+else
+    AOSP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 
 if [ -n "$OUT" ] && [ -d "$OUT" ]; then
     OUT_DIR="$OUT"
@@ -31,8 +35,13 @@ mkdir -p "${RELEASE_DIR}"
 rm -rf "${TMP_ROOTFS}"
 mkdir -p "${TMP_ROOTFS}"
 
-DATE_STR=$(date "+%Y-%m-%d-%H")
-TAR_ZST_FILE="${RELEASE_DIR}/redroid13_pve_template_${DATE_STR}.tar.zst"
+TARGET_BASENAME="${1:-${CUSTOM_NAME}}"
+if [ -n "$TARGET_BASENAME" ]; then
+    TAR_ZST_FILE="${RELEASE_DIR}/${TARGET_BASENAME}"
+else
+    DATE_STR=$(date "+%Y-%m-%d-%H")
+    TAR_ZST_FILE="${RELEASE_DIR}/redroid13_pve_template_${DATE_STR}.tar.zst"
+fi
 LATEST_LINK="${RELEASE_DIR}/redroid13_pve_template_latest.tar.zst"
 
 echo "============================================================"
@@ -117,6 +126,10 @@ echo "============================================================"
 echo " 打包完成!"
 echo " 生成 PVE 模板: ${TAR_ZST_FILE}"
 echo " 模板大小     : $(du -sh "${TAR_ZST_FILE}" | cut -f1)"
+
+echo "--> 6. 计算 SHA256 校验和..."
+(cd "$(dirname "${TAR_ZST_FILE}")" && sha256sum "$(basename "${TAR_ZST_FILE}")" > "$(basename "${TAR_ZST_FILE}").sha256")
+echo " SHA256 校验  : $(cat "${TAR_ZST_FILE}.sha256")"
 echo "============================================================"
 
 # 5. 可选：自动同步至 PVE 宿主机 (pve-155h) 的模板目录

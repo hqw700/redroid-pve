@@ -191,6 +191,7 @@ git -C system/core apply /path/to/redroid-pve/patches/android-13/0002-system-cor
 git -C system/bpf apply /path/to/redroid-pve/patches/android-13/0003-system-bpf-unprivileged-adaptation.patch
 git -C system/memory/lmkd apply /path/to/redroid-pve/patches/android-13/0004-system-memory-lmkd-unprivileged-adaptation.patch
 git -C frameworks/libs/net apply /path/to/redroid-pve/patches/android-13/0005-frameworks-libs-net-bpfmap-abort-fix.patch
+git -C external/toybox apply /path/to/redroid-pve/patches/android-13/0006-external-toybox-accurate-cpu-mem-for-containers.patch
 
 # 4. 编译系统
 source build/envsetup.sh

@@ -1,0 +1,52 @@
+diff --git a/toys/other/free.c b/toys/other/free.c
+index 6be1cdc..32d4949 100644
+--- a/toys/other/free.c
++++ b/toys/other/free.c
+@@ -41,9 +41,34 @@ static char *convert(unsigned long d)
+ void free_main(void)
+ {
+   struct sysinfo in;
++  char *mem_buf, *pos;
+ 
+   sysinfo(&in);
+   TT.units = in.mem_unit ? in.mem_unit : 1;
++
++  mem_buf = readfile("/proc/meminfo", toybuf, sizeof(toybuf) - 1);
++  if (mem_buf) {
++    unsigned long mem_total = 0, mem_free = 0, buffers = 0, cached = 0, shmem = 0, swap_total = 0, swap_free = 0;
++    if ((pos = strafter(mem_buf, "MemTotal:"))) mem_total = atol(pos);
++    if ((pos = strafter(mem_buf, "\nMemFree:"))) mem_free = atol(pos);
++    if ((pos = strafter(mem_buf, "\nBuffers:"))) buffers = atol(pos);
++    if ((pos = strafter(mem_buf, "\nCached:"))) cached = atol(pos);
++    if ((pos = strafter(mem_buf, "\nShmem:"))) shmem = atol(pos);
++    if ((pos = strafter(mem_buf, "\nSwapTotal:"))) swap_total = atol(pos);
++    if ((pos = strafter(mem_buf, "\nSwapFree:"))) swap_free = atol(pos);
++
++    if (mem_total > 0) {
++      in.totalram = mem_total;
++      in.freeram = mem_free;
++      in.bufferram = buffers + cached;
++      in.sharedram = shmem;
++      in.totalswap = swap_total;
++      in.freeswap = swap_free;
++      in.mem_unit = 1024;
++      TT.units = 1024;
++    }
++  }
++
+   while ((toys.optflags&(FLAG_h-1)) && !(toys.optflags&(1<<TT.bits))) TT.bits++;
+   TT.bits *= 10;
+   TT.buf = toybuf;
+diff --git a/toys/posix/ps.c b/toys/posix/ps.c
+index 3884097..084847f 100644
+--- a/toys/posix/ps.c
++++ b/toys/posix/ps.c
+@@ -1617,7 +1617,7 @@ static void top_common(
+           char hr[4][32];
+           long long ll, up = 0;
+           long run[6];
+-          int j, k, cpus = sysconf(_SC_NPROCESSORS_CONF);
++          int j, k, cpus = sysconf(_SC_NPROCESSORS_ONLN); if (cpus <= 0) cpus = 1;
+ 
+ 
+           // Count running, sleeping, stopped, zombie processes.

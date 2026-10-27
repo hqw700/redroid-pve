@@ -1,8 +1,41 @@
 diff --git a/lmkd.cpp b/lmkd.cpp
-index 6405187..e46ccd3 100644
+index 6405187..b48ccea 100644
 --- a/lmkd.cpp
 +++ b/lmkd.cpp
-@@ -3482,7 +3482,8 @@ static int init(void) {
+@@ -697,12 +697,21 @@ static void remove_claims(pid_t pid) {
+ static void ctrl_data_close(int dsock_idx) {
+     struct epoll_event epev;
+ 
++    if (dsock_idx < 0 || dsock_idx >= MAX_DATA_CONN) {
++        return;
++    }
++    if (data_sock[dsock_idx].sock < 0) {
++        return;
++    }
++
+     ALOGI("closing lmkd data connection");
+     if (epoll_ctl(epollfd, EPOLL_CTL_DEL, data_sock[dsock_idx].sock, &epev) == -1) {
+         // Log a warning and keep going
+         ALOGW("epoll_ctl for data connection socket failed; errno=%d", errno);
+     }
+-    maxevents--;
++    if (maxevents > 0) {
++        maxevents--;
++    }
+ 
+     close(data_sock[dsock_idx].sock);
+     data_sock[dsock_idx].sock = -1;
+@@ -1605,7 +1614,8 @@ static void ctrl_connect_handler(int data __unused, uint32_t events __unused,
+     epev.data.ptr = (void *)&(data_sock[free_dscock_idx].handler_info);
+     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, data_sock[free_dscock_idx].sock, &epev) == -1) {
+         ALOGE("epoll_ctl for data connection socket failed; errno=%d", errno);
+-        ctrl_data_close(free_dscock_idx);
++        close(data_sock[free_dscock_idx].sock);
++        data_sock[free_dscock_idx].sock = -1;
+         return;
+     }
+     maxevents++;
+@@ -3482,7 +3492,8 @@ static int init(void) {
          }
      } else {
          if (!init_monitors()) {
@@ -12,3 +45,17 @@ index 6405187..e46ccd3 100644
          }
          /* let the others know it does support reporting kills */
          property_set("sys.lmk.reportkills", "1");
+@@ -3631,6 +3642,13 @@ static void mainloop(void) {
+             if (errno == EINTR)
+                 continue;
+             ALOGE("epoll_wait failed (errno=%d)", errno);
++            if (errno == EINVAL) {
++                ALOGE("Fatal EINVAL in epoll_wait (maxevents=%d), recovering to 1 or restarting...", maxevents);
++                if (maxevents <= 0) {
++                    maxevents = 1;
++                }
++                usleep(100000);
++            }
+             continue;
+         }
+ 

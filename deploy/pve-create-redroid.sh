@@ -13,11 +13,18 @@ CORES=${4:-8}
 MEMORY=${5:-4096}
 SWAP=${6:-1024}
 DISK_SIZE=${7:-32}
-TEMPLATE="/var/lib/vz/template/cache/redroid13_intel_latest.tar.zst"
+TEMPLATE=${8:-"/var/lib/vz/template/cache/redroid13_intel_latest.tar.zst"}
 
 if [ ! -f "$TEMPLATE" ]; then
-    echo "[ERROR] 未找到 ReDroid PVE 模板: $TEMPLATE"
-    exit 1
+    # 自动检测 /var/lib/vz/template/cache/ 下最新的 redroid 模板
+    DETECTED_TPL=$(ls -t /var/lib/vz/template/cache/*redroid*.tar.zst 2>/dev/null | head -n 1 || true)
+    if [ -n "$DETECTED_TPL" ] && [ -f "$DETECTED_TPL" ]; then
+        TEMPLATE="$DETECTED_TPL"
+    else
+        echo "[ERROR] 未找到 ReDroid PVE 模板: $TEMPLATE"
+        echo "[HINT] 请先下载模板至 /var/lib/vz/template/cache/ 目录"
+        exit 1
+    fi
 fi
 
 echo "============================================================"

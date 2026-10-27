@@ -1,10 +1,6 @@
 # ReDroid for PVE (redroid-pve)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/remote-android/redroid-doc/master/redroid.png" width="120" alt="ReDroid Logo" />
-</p>
-
-<p align="center">
   <b>Native Android 13 (AOSP) Privileged Container Solution for Proxmox VE (PVE)</b><br>
   5s Cold Boot · Native LAN IP · Host Safety Hardening · Zero Docker Nesting · Instant Snapshots
 </p>
@@ -13,6 +9,10 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
   <a href="https://github.com/hqw700/redroid-pve/releases"><img src="https://img.shields.io/github/v/release/hqw700/redroid-pve?color=brightgreen" alt="Release"></a>
   <a href="README.md"><img src="https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg" alt="Chinese README"></a>
+</p>
+
+<p align="center">
+  <img src="assets/preview.png" width="95%" alt="ReDroid for PVE Preview (Proxmox VE + scrcpy)" />
 </p>
 
 ---
@@ -43,8 +43,8 @@ Log into your PVE host (as root) and download the pre-built, highly compressed t
 ```bash
 cd /var/lib/vz/template/cache/
 
-wget -O redroid13_intel_latest.tar.zst \
-  https://github.com/hqw700/redroid-pve/releases/latest/download/redroid13_pve_template_latest.tar.zst
+# Download the v0.0.1 Android 13 x86_64 template image (~620MB)
+wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.1/redroid13_x86_64_pve_template_2026-10-26.tar.zst
 ```
 
 ---

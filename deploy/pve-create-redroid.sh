@@ -16,6 +16,7 @@ SWAP=${6:-1024}
 DISK_SIZE=${7:-32}
 TEMPLATE=${8:-"/var/lib/vz/template/cache/redroid13_intel_latest.tar.zst"}
 UNPRIVILEGED=${9:-1} # 默认开启非特权模式 (1=非特权, 0=特权)
+GPU_MODE=${10:-"host"} # 默认开启宿主 GPU 硬件加速 (host/guest)
 
 if [ ! -f "$TEMPLATE" ]; then
     # 自动检测 /var/lib/vz/template/cache/ 下最新的 redroid 模板
@@ -69,13 +70,18 @@ pct create ${VMID} "${TEMPLATE}" \
 
 # 4. 注入加固配置与运行参数
 echo "--> 2. 注入直通与 LXC 安全加固参数..."
+GPU_CMD="androidboot.redroid_gpu_mode=${GPU_MODE}"
+if [ "${GPU_MODE}" = "host" ]; then
+    GPU_CMD="${GPU_CMD} androidboot.redroid_gpu_node=/dev/dri/renderD128"
+fi
+
 cat << EOF >> /etc/pve/lxc/${VMID}.conf
 lxc.apparmor.profile: unconfined
 lxc.cap.drop:
 lxc.cap.drop: sys_boot
 lxc.mount.auto: proc:rw sys:mixed cgroup:rw
 lxc.hook.mount: /usr/share/lxc/hooks/redroid-pve-hook.sh
-lxc.init.cmd: /init androidboot.hardware=redroid androidboot.redroid_gpu_mode=guest androidboot.redroid_width=1080 androidboot.redroid_height=1920 androidboot.redroid_dpi=320 ro.boot.redroid_fps=60
+lxc.init.cmd: /init androidboot.hardware=redroid ${GPU_CMD} androidboot.redroid_width=1080 androidboot.redroid_height=1920 androidboot.redroid_dpi=320 ro.boot.redroid_fps=60
 lxc.autodev: 0
 lxc.mount.entry: tmpfs dev tmpfs create=dir,rw,nosuid,size=134217728,mode=755 0 0
 EOF

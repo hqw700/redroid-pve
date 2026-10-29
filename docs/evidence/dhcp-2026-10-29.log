@@ -1,0 +1,42 @@
+--------- beginning of main
+10-29 08:52:10.722  1387  1691 E DhcpClient: Error retrieving network attributes: ILLEGAL ARGUMENT
+10-29 08:52:10.723  1387  1690 D DhcpClient: Broadcasting DHCPDISCOVER
+10-29 08:52:10.724  1387  1690 D DhcpClient: Received packet: bc:24:11:3e:3e:07 OFFER, ip /192.0.2.50, mask /255.255.255.0, DNS servers: /192.0.2.1 , gateways [/192.0.2.1], lease time 60, domain null
+10-29 08:52:10.724  1387  1690 D DhcpClient: Got pending lease: android.net.networkstack.DhcpResults@6d004c4e DHCP server /192.0.2.1 Vendor info null lease 60 seconds Servername 
+10-29 08:52:10.724  1387  1690 D DhcpClient: Broadcasting DHCPREQUEST ciaddr=0.0.0.0 request=192.0.2.50 serverid=192.0.2.1
+10-29 08:52:10.725  1387  1690 D DhcpClient: Received packet: bc:24:11:3e:3e:07 ACK: your new IP /192.0.2.50, netmask /255.255.255.0, gateways [/192.0.2.1] DNS servers: /192.0.2.1 , lease time 60
+10-29 08:52:10.725  1387  1690 D DhcpClient: Confirmed lease: android.net.networkstack.DhcpResults@6d004c4e DHCP server /192.0.2.1 Vendor info null lease 60 seconds Servername 
+10-29 08:52:10.727  1387  1690 D DhcpClient: Scheduling renewal in 29s
+10-29 08:52:10.727  1387  1690 D DhcpClient: Scheduling rebind in 52s
+10-29 08:52:10.727  1387  1690 D DhcpClient: Scheduling expiry in 59s
+10-29 08:52:40.727  1387  1690 D DhcpClient: Unicasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null to /192.0.2.1:67
+10-29 08:52:40.728  1387  1690 D DhcpClient: Received packet: bc:24:11:3e:3e:07 ACK: your new IP /192.0.2.50, netmask /255.255.255.0, gateways [/192.0.2.1] DNS servers: /192.0.2.1 , lease time 60
+10-29 08:52:40.728  1387  1690 D DhcpClient: Renewed lease: android.net.networkstack.DhcpResults@6d004c4e DHCP server /192.0.2.1 Vendor info null lease 60 seconds Servername 
+10-29 08:52:40.728  1387  1690 D DhcpClient: Scheduling renewal in 30s
+10-29 08:52:40.728  1387  1690 D DhcpClient: Scheduling rebind in 52s
+10-29 08:52:40.728  1387  1690 D DhcpClient: Scheduling expiry in 60s
+10-29 08:53:10.729  1387  1690 D DhcpClient: Unicasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null to /192.0.2.1:67
+10-29 08:53:11.633  1387  1690 D DhcpClient: Unicasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null to /192.0.2.1:67
+10-29 08:53:13.721  1387  1690 D DhcpClient: Unicasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null to /192.0.2.1:67
+10-29 08:53:17.348  1387  1690 D DhcpClient: Unicasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null to /192.0.2.1:67
+10-29 08:53:24.756  1387  1690 D DhcpClient: Unicasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null to /192.0.2.1:67
+10-29 08:53:33.229  1387  1690 D DhcpClient: Broadcasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null
+10-29 08:53:34.150  1387  1690 D DhcpClient: Broadcasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null
+10-29 08:53:36.017  1387  1690 D DhcpClient: Broadcasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null
+10-29 08:53:39.905  1387  1690 D DhcpClient: Broadcasting DHCPREQUEST ciaddr=192.0.2.50 request=0.0.0.0 serverid=null
+10-29 08:53:40.729  1387  1690 D DhcpClient: Lease expired!
+10-29 08:53:40.737  1387  1690 D DhcpClient: DHCP Packet Handler stopped
+10-29 08:53:40.754  1387  1690 D DhcpClient: doQuit
+10-29 08:53:40.755  1387  1690 D DhcpClient: onQuitting
+10-29 08:53:40.758  1387  1691 E DhcpClient: Error retrieving network attributes: ILLEGAL ARGUMENT
+10-29 08:53:40.758  1387  2610 D DhcpClient: Broadcasting DHCPDISCOVER
+10-29 08:53:41.818  1387  2610 D DhcpClient: Broadcasting DHCPDISCOVER
+10-29 08:53:43.965  1387  2610 D DhcpClient: Broadcasting DHCPDISCOVER
+10-29 08:53:43.966  1387  2610 D DhcpClient: Received packet: bc:24:11:3e:3e:07 OFFER, ip /192.0.2.50, mask /255.255.255.0, DNS servers: /192.0.2.1 , gateways [/192.0.2.1], lease time 60, domain null
+10-29 08:53:43.966  1387  2610 D DhcpClient: Got pending lease: android.net.networkstack.DhcpResults@6d004c4e DHCP server /192.0.2.1 Vendor info null lease 60 seconds Servername 
+10-29 08:53:43.966  1387  2610 D DhcpClient: Broadcasting DHCPREQUEST ciaddr=0.0.0.0 request=192.0.2.50 serverid=192.0.2.1
+10-29 08:53:43.966  1387  2610 D DhcpClient: Received packet: bc:24:11:3e:3e:07 ACK: your new IP /192.0.2.50, netmask /255.255.255.0, gateways [/192.0.2.1] DNS servers: /192.0.2.1 , lease time 60
+10-29 08:53:43.966  1387  2610 D DhcpClient: Confirmed lease: android.net.networkstack.DhcpResults@6d004c4e DHCP server /192.0.2.1 Vendor info null lease 60 seconds Servername 
+10-29 08:53:43.968  1387  2610 D DhcpClient: Scheduling renewal in 29s
+10-29 08:53:43.968  1387  2610 D DhcpClient: Scheduling rebind in 52s
+10-29 08:53:43.968  1387  2610 D DhcpClient: Scheduling expiry in 59s

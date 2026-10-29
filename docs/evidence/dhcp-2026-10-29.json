@@ -1,0 +1,111 @@
+{
+  "production_before": {
+    "files": {
+      "/usr/local/bin/pve-configure-redroid": "fe23c5c3139a99ec4452f964a0f68faaf04848de7c211dbe566aec3133202c8b",
+      "/usr/local/bin/pve-create-redroid": "e12ab2feea5b97ce07c1b4ad410e428e59cf584ba2d0ab17c918933f18bea466",
+      "/usr/share/lxc/hooks/redroid-pve-hook.sh": "513d8ec1822fce28b71eee956fd6df7d2275ef337fc707c2a55ea7f148853d57",
+      "/var/lib/vz/snippets/redroid-hook.sh": "a1cb8fb9167299ec62a084ec1cdeb9aa8285d52eae65986b574f6e7f4f7fdec0",
+      "/etc/resolv.conf": "75ee804c2952afc96a2d99409d042bdc288bde752e4790b5de69c85666f2ac6f"
+    },
+    "routes": "default via 192.168.100.1 dev vmbr0 proto kernel onlink \n192.168.100.0/24 dev vmbr0 proto kernel scope link src 192.168.100.173 \n"
+  },
+  "initial": {
+    "vmid": 548902,
+    "mode": "dhcp",
+    "provider": "android",
+    "running": true,
+    "ready": true,
+    "ipv4": [
+      "192.0.2.50/24"
+    ],
+    "gateway": "192.0.2.1",
+    "dns": [
+      "192.0.2.1"
+    ]
+  },
+  "android_booted": true,
+  "ping": "PING 192.0.2.1 (192.0.2.1) 56(84) bytes of data.\n64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=0.030 ms\n\n--- 192.0.2.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 0.030/0.030/0.030/0.000 ms\n",
+  "dns_ping": "PING pve-dhcp.test (192.0.2.1) 56(84) bytes of data.\n64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=0.016 ms\n\n--- pve-dhcp.test ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 0.016/0.016/0.016/0.000 ms\n",
+  "renewal": [
+    {
+      "time": 1793263960.7278922,
+      "type": 3,
+      "client_ip": "192.0.2.50",
+      "peer": "192.0.2.50",
+      "paused": false,
+      "mac": "bc:24:11:3e:3e:07"
+    }
+  ],
+  "expired": true,
+  "expired_status": {
+    "vmid": 548902,
+    "mode": "dhcp",
+    "provider": "android",
+    "running": true,
+    "ready": false,
+    "ipv4": [],
+    "gateway": "",
+    "dns": []
+  },
+  "recovered": {
+    "vmid": 548902,
+    "mode": "dhcp",
+    "provider": "android",
+    "running": true,
+    "ready": true,
+    "ipv4": [
+      "192.0.2.50/24"
+    ],
+    "gateway": "192.0.2.1",
+    "dns": [
+      "192.0.2.1"
+    ]
+  },
+  "restart": {
+    "vmid": 548902,
+    "mode": "dhcp",
+    "provider": "android",
+    "running": true,
+    "ready": true,
+    "ipv4": [
+      "192.0.2.50/24"
+    ],
+    "gateway": "192.0.2.1",
+    "dns": [
+      "192.0.2.1"
+    ]
+  },
+  "restart_new_client": true,
+  "stopped": {
+    "vmid": 548902,
+    "mode": "dhcp",
+    "provider": "android",
+    "running": false,
+    "ready": false,
+    "ipv4": [],
+    "gateway": "",
+    "dns": []
+  },
+  "stop_client_gone": true,
+  "stop_pidfile_gone": true,
+  "host_dhcp_client_absent": true,
+  "pass": true,
+  "production_after": {
+    "files": {
+      "/usr/local/bin/pve-configure-redroid": "fe23c5c3139a99ec4452f964a0f68faaf04848de7c211dbe566aec3133202c8b",
+      "/usr/local/bin/pve-create-redroid": "e12ab2feea5b97ce07c1b4ad410e428e59cf584ba2d0ab17c918933f18bea466",
+      "/usr/share/lxc/hooks/redroid-pve-hook.sh": "513d8ec1822fce28b71eee956fd6df7d2275ef337fc707c2a55ea7f148853d57",
+      "/var/lib/vz/snippets/redroid-hook.sh": "a1cb8fb9167299ec62a084ec1cdeb9aa8285d52eae65986b574f6e7f4f7fdec0",
+      "/etc/resolv.conf": "75ee804c2952afc96a2d99409d042bdc288bde752e4790b5de69c85666f2ac6f"
+    },
+    "routes": "default via 192.168.100.1 dev vmbr0 proto kernel onlink \n192.168.100.0/24 dev vmbr0 proto kernel scope link src 192.168.100.173 \n"
+  },
+  "production_unchanged": true,
+  "cleanup": {
+    "ct_gone": true,
+    "bridge_gone": true,
+    "snippet_gone": true
+  },
+  "ct_init_pid": 170046,
+  "scope": "PVE 9.1.1, unprivileged Android 13 CT, isolated bridge, 60-second DHCP lease; both patches 0007 and 0008 present."
+}

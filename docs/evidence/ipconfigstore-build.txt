@@ -1,0 +1,41 @@
+[1mbuild/make/core/soong_config.mk:209: [35mwarning: [0m[1mBOARD_PLAT_PUBLIC_SEPOLICY_DIR has been deprecated. Use SYSTEM_EXT_PUBLIC_SEPOLICY_DIRS instead.[0m
+[1mbuild/make/core/soong_config.mk:210: [35mwarning: [0m[1mBOARD_PLAT_PRIVATE_SEPOLICY_DIR has been deprecated. Use SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS instead.[0m
+============================================
+PLATFORM_VERSION_CODENAME=REL
+PLATFORM_VERSION=13
+TARGET_PRODUCT=redroid_x86_64
+TARGET_BUILD_VARIANT=userdebug
+TARGET_BUILD_TYPE=release
+TARGET_ARCH=x86_64
+TARGET_ARCH_VARIANT=x86_64
+TARGET_2ND_ARCH=x86
+TARGET_2ND_ARCH_VARIANT=x86_64
+HOST_ARCH=x86_64
+HOST_2ND_ARCH=x86
+HOST_OS=linux
+HOST_OS_EXTRA=Linux-6.17.2-1-pve-x86_64-Ubuntu-22.04-LTS
+HOST_CROSS_OS=windows
+HOST_CROSS_ARCH=x86
+HOST_CROSS_2ND_ARCH=x86_64
+HOST_BUILD_TYPE=release
+BUILD_ID=TQ3C.230901.001.B1
+OUT_DIR=out
+PRODUCT_SOONG_NAMESPACES=frameworks/av/services/audiopolicy/config
+============================================
+[ 20% 1/5] regenerate globs shard 294 of 1024
+[ 40% 2/5] regenerate globs shard 377 of 1024
+[ 60% 3/5] regenerate globs shard 775 of 1024
+[ 80% 4/5] regenerate globs shard 22 of 1024
+No need to regenerate ninja file
+No need to regenerate ninja file
+No need to regenerate ninja file
+Starting ninja...
+[ 50% 5/10] //vendor/redroid/ipconfigstore:ipconfigstore clang++ main.cc
+[ 60% 6/10] //vendor/redroid/ipconfigstore:ipconfigstore link ipconfigstore
+[ 70% 7/10] Copy symbols with mapping: out/target/product/redroid_x86_64/symbols/vendor/bin/ipconfigstore
+[ 80% 8/10] //vendor/redroid/ipconfigstore:ipconfigstore strip ipconfigstore
+[ 90% 9/10] target Prebuilt: ipconfigstore (out/target/product/redroid_x86_64/obj/EXECUTABLES/ipconfigstore_intermediates/ipconfigstore)
+[100% 10/10] Install out/target/product/redroid_x86_64/vendor/bin/ipconfigstore
+
+#### build completed successfully (9 seconds) ####
+

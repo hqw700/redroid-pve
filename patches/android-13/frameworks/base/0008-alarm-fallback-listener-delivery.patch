@@ -1,0 +1,46 @@
+--- a/apex/jobscheduler/service/java/com/android/server/alarm/AlarmManagerService.java
++++ b/apex/jobscheduler/service/java/com/android/server/alarm/AlarmManagerService.java
+@@ -4242,7 +4242,10 @@
+             msg.what = AlarmHandler.ALARM_EVENT;
+ 
+             mHandler.removeMessages(msg.what);
+-            mHandler.sendMessageAtTime(msg, when);
++            // Alarm deadlines are elapsed realtime; Handler deadlines use
++            // uptime. A host may already have suspended before this CT started.
++            mHandler.sendMessageDelayed(msg,
++                    Math.max(0, when - mInjector.getElapsedRealtime()));
+         }
+     }
+ 
+@@ -4914,26 +4917,12 @@
+                     synchronized (mLock) {
+                         final long nowELAPSED = mInjector.getElapsedRealtime();
+                         triggerAlarmsLocked(triggerList, nowELAPSED);
++                        // Containers may lack the kernel alarm driver. Use the same
++                        // delivery path as AlarmThread: DHCP WakeupMessage alarms
++                        // use IAlarmListener and have no PendingIntent operation.
++                        deliverAlarmsLocked(triggerList, nowELAPSED);
++                        rescheduleKernelAlarmsLocked();
+                         updateNextAlarmClockLocked();
+-                    }
+-
+-                    // now trigger the alarms without the lock held
+-                    for (int i = 0; i < triggerList.size(); i++) {
+-                        Alarm alarm = triggerList.get(i);
+-                        try {
+-                            // Disallow AlarmManager to start random background activity.
+-                            final Bundle bundle = getAlarmOperationBundle(alarm);
+-                            alarm.operation.send(/* context */ null, /* code */0, /* intent */
+-                                    null, /* onFinished */null, /* handler */
+-                                    null, /* requiredPermission */ null, bundle);
+-                        } catch (PendingIntent.CanceledException e) {
+-                            if (alarm.repeatInterval > 0) {
+-                                // This IntentSender is no longer valid, but this
+-                                // is a repeating alarm, so toss the hoser.
+-                                removeImpl(alarm.operation, null);
+-                            }
+-                        }
+-                        decrementAlarmCount(alarm.uid, 1);
+                     }
+                     break;
+                 }

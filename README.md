@@ -205,3 +205,45 @@ m -j$(nproc)
 
 本项目采用 [Apache-2.0 License](LICENSE) 开源协议。
 ReDroid 是 [remote-android](https://github.com/remote-android) 组织的开源项目，遵循其官方许可协议。
+
+## 面向原生 PVE 和管理台的统一运行接口（API 1）
+
+运行脚本单独版本化；已有静态网络功能不要求重编镜像，DHCP 的镜像升级要求见下文。先执行 `sudo ./deploy/install-hooks.sh`；安装时保留 `local` 存储已有 content，只追加 `snippets`。
+
+```bash
+pve-configure-redroid --version
+pve-configure-redroid 201 --gpu-mode guest --width 720 --height 1280 --dpi 320 --fps 60 --json
+pve-configure-redroid 201 --gpu-mode guest --dry-run --json
+pve-create-redroid 202 192.168.100.202/24 192.168.100.1 4 4096 1024 32 "" 1 guest --no-start
+```
+
+`pve-configure-redroid` 只为已有的**停止容器**应用官方运行配置：读取实际特权模式、更新 Android/PVE 运行规则，保留无关挂载和快照，不创建、不启停、不销毁容器。遇到其他 PVE hookscript 时明确拒绝覆盖，需先安排 Hook 链接。额外启动参数限定为独立的 `androidboot.*=value` 或 `ro.boot.*=value`。宿主 GPU 模式要求渲染节点存在；无 GPU 主机使用 guest 模式。
+
+原生 PVE 界面用户创建停止的 CT 后应用该配置，即可继续在 PVE 中正常启停，不需要 CloudPhone 或 Agent。命令行 `pve-create-redroid` 保留原有位置参数及非特权默认值，但现在遇到已有 VMID 会拒绝执行，不再自动销毁；`--no-start` 方便调用方追加集成挂载后再自行启动。
+
+第三方管理台通过 PVE API 管理 CPU/内存/磁盘，调用此官方配置接口，然后仅添加自己的集成挂载。Android 基础设备、GPU、网络、FUSE 和启动适配始终由本仓库维护。
+
+回归测试：`python3 -m unittest discover -s tests -v`。单元测试不能替代真实 PVE 上的硬件与开机验证。
+
+原生创建脚本可用 `--storage <存储ID> --bridge <网桥名>` 指定系统盘存储和网桥，也可设置 `REDROID_PVE_STORAGE`、`REDROID_PVE_BRIDGE`；未指定时保留原有 `local-lvm` / `vmbr0` 默认值。
+
+### DHCP 自动获取 IPv4（运行脚本 1.1.0 + 镜像网络 API 1）
+
+DHCP 获取、续租、租约过期、DNS 和路由由 **Android 自带的 IpClient/DhcpClient** 管理。PVE 只提供网卡；容器停止时，这些进程随容器退出，没有宿主 DHCP 守护进程需要维护。不依赖 CloudPhone 或 Agent，也不要求新版 PVE 的 `host-managed` 功能。
+
+DHCP 需要镜像同时包含补丁 `0007-native-dhcp-ipconfigstore.patch` 和 `0008-alarm-fallback-listener-delivery.patch`。旧版镜像中的 ipconfigstore 只会写静态配置；**仅更新宿主脚本不足以启用 DHCP**。原有静态网络继续兼容。
+
+```bash
+# 检查下载到 PVE 的实际镜像，旧镜像会明确拒绝
+pve-configure-redroid --check-dhcp --template /var/lib/vz/template/cache/redroid-dhcp.tar.zst
+# 地址、网关和 DNS 都由现有 DHCP 服务提供
+pve-create-redroid 203 dhcp - 4 4096 0 32 /var/lib/vz/template/cache/redroid-dhcp.tar.zst
+# 指定资源时，用 - 占据原网关参数位置；也支持 --no-start
+pve-create-redroid 204 dhcp - 4 4096 0 32 /var/lib/vz/template/cache/redroid-dhcp.tar.zst 1 guest --no-start --bridge vmbr0
+# 查询实际地址；等待获取成功，超时返回非零状态
+pve-configure-redroid 203 --network-status --wait-network 40
+```
+
+原生 PVE 界面中选择 DHCP 后，在停止的 CT 上执行 `pve-configure-redroid <VMID> --json`。它会从 `net0` 推导 `androidboot.redroid_net_mode=dhcp`，并移除宿主 DHCP 管理标志，保证只有 Android 一个 DHCP 客户端。不要同时填写静态网关。接入网桥/VLAN 必须能访问 DHCP 服务。
+
+原生创建命令在分配磁盘之前检查镜像；挂载 Hook 还会在启动前再次校验镜像能力，避免 GUI 用户绕过检查后因旧镜像启动失败。现有位置参数、默认静态地址和非特权默认值保持兼容。实现、升级及验收见 [网络说明](docs/networking.md)。

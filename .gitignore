@@ -10,3 +10,7 @@ out/
 .DS_Store
 *.swp
 *~
+
+# Python runtime tests
+__pycache__/
+*.py[cod]

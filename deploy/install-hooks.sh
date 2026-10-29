@@ -1,44 +1,35 @@
 #!/bin/bash
-set -e
-
-# ==============================================================================
-# ReDroid PVE 一键宿主机环境初始化脚本
-# 适用环境：Proxmox VE 7.x / 8.x / 9.x 宿主机
-# ==============================================================================
-
+# Official runtime bootstrap. Does not create/start containers or download images.
+set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo "============================================================"
-echo " 开始初始化 PVE 宿主机 ReDroid 运行环境..."
-echo "============================================================"
-
-# 1. 确保 PVE local 存储开启 snippets 特性
-echo "--> 1. 配置 PVE 本地存储支持 snippets..."
-pvesm set local --content iso,vztmpl,snippets,backup,import >/dev/null 2>&1 || true
-
-# 2. 创建系统目录
-echo "--> 2. 准备系统钩子目录..."
-mkdir -p /var/lib/vz/snippets /usr/share/lxc/hooks /var/lib/vz/template/cache
-
-# 3. 部署加固 Hook 与网络 Hook
-echo "--> 3. 部署加固 Hook 脚本..."
-cp -f "${SCRIPT_DIR}/redroid-hook.sh" /var/lib/vz/snippets/redroid-hook.sh
-chmod +x /var/lib/vz/snippets/redroid-hook.sh
-
-cp -f "${SCRIPT_DIR}/redroid-pve-hook.sh" /usr/share/lxc/hooks/redroid-pve-hook.sh
-chmod +x /usr/share/lxc/hooks/redroid-pve-hook.sh
-
-# 4. 安装快捷创建命令到 /usr/local/bin
-echo "--> 4. 安装 pve-create-redroid 命令..."
-cp -f "${SCRIPT_DIR}/pve-create-redroid.sh" /usr/local/bin/pve-create-redroid
-chmod +x /usr/local/bin/pve-create-redroid
-
-echo "============================================================"
-echo " [SUCCESS] PVE 宿主机初始化就绪！"
-echo ""
-echo " 您现在可以直接使用以下命令创建 Android 容器："
-echo "   pve-create-redroid <VMID> <静态IP/掩码> <默认网关>"
-echo ""
-echo " 示例："
-echo "   pve-create-redroid 201 192.168.100.201/24 192.168.100.1"
-echo "============================================================"
+[ "$(id -u)" = 0 ] || { echo 'Run as root on the PVE host' >&2; exit 1; }
+command -v pvesm >/dev/null
+command -v python3 >/dev/null
+# Read the existing local storage configuration instead of replacing its content list.
+readarray -t STORAGE < <(python3 - <<'PY'
+from pathlib import Path
+block = False
+settings = {}
+for line in Path('/etc/pve/storage.cfg').read_text().splitlines():
+    if line and not line[0].isspace():
+        block = line.strip() == 'dir: local'
+    elif block and line.strip():
+        key, _, value = line.strip().partition(' ')
+        settings[key] = value.strip()
+if not settings.get('path'):
+    raise SystemExit('local directory storage is required for the PVE hookscript')
+contents = set(filter(None, settings.get('content', '').split(',')))
+contents.add('snippets')
+print(settings['path'])
+print(','.join(sorted(contents)))
+PY
+)
+[ "${#STORAGE[@]}" -eq 2 ] || { echo 'Cannot read local PVE storage configuration' >&2; exit 1; }
+pvesm set local --content "${STORAGE[1]}"
+install -d "${STORAGE[0]}/snippets" /usr/share/lxc/hooks /usr/local/bin /usr/local/share/redroid-pve
+install -m 0755 "${SCRIPT_DIR}/redroid-hook.sh" "${STORAGE[0]}/snippets/redroid-hook.sh"
+install -m 0755 "${SCRIPT_DIR}/redroid-pve-hook.sh" /usr/share/lxc/hooks/redroid-pve-hook.sh
+install -m 0755 "${SCRIPT_DIR}/pve-create-redroid.sh" /usr/local/bin/pve-create-redroid
+install -m 0755 "${SCRIPT_DIR}/pve-configure-redroid.py" /usr/local/bin/pve-configure-redroid
+install -m 0644 "${SCRIPT_DIR}/VERSION" /usr/local/share/redroid-pve/VERSION
+pve-configure-redroid --version

@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-29",
+  "runtime_version": "1.1.0",
+  "android": "13",
+  "pve": "9.1.1",
+  "image_preparation": "Validated v0.0.2 template repacked with rebuilt ipconfigstore and services.jar; old services precompiled files removed. No public release published.",
+  "artifacts": {
+    "ipconfigstore": "608abe9b765d33370a8f9c25791d51f1b9516743439f04f2892ed77d954072be",
+    "services.jar": "7602fd19b01057874a5af4b134d248c53a7c5a6f7030fae4ccb801ddc55f3d6f",
+    "dhcp-image.tar.zst": "a24146e814beb7a27e5ae2094a76d2fb09bf326c6715639c820321378ef3747a"
+  },
+  "tests": {
+    "pve_linux_unittest": 15,
+    "native_dhcp": "passed",
+    "native_static": "passed"
+  },
+  "source_files": {
+    "deploy/VERSION": "1575e1af4a95f12f70b4ee6a6adce8160953d93ea17dc2611b90883ccc3ad3b8",
+    "deploy/install-hooks.sh": "210719b4b947b8e35ebf0940138a0aef43ce631eedd31881d97a882f59ee299b",
+    "deploy/pve-configure-redroid.py": "d9e841912b799152f45defd2856025419b4679d3afd1dc295ccdcfb9f0a61be8",
+    "deploy/pve-create-redroid.sh": "521c90ff471f247afdce0479e926b8dfd1c8d1ab9e47cf043a47c990fb7a938b",
+    "deploy/redroid-hook.sh": "d1066d82cf392b927b04486d710d308a9c0756abd9cff9a3a03a26067a54e3b5",
+    "deploy/redroid-pve-hook.sh": "4d061361dd8661c468951b1554a6b03a43ad1c493d41ad33e8c9a12924e2a2f0",
+    "patches/android-13/external/toybox/0006-external-toybox-accurate-cpu-mem-for-containers.patch": "340b8c235eeea8fd26f852abf25cd85fb43124c5e30ff4ea0357aee543cdc56d",
+    "patches/android-13/frameworks/base/0008-alarm-fallback-listener-delivery.patch": "2974897f1fc453662ed68f1fb2e6d3e59e514e9967a1a07d4d9aaebe15d2359d",
+    "patches/android-13/frameworks/libs/net/0005-frameworks-libs-net-bpfmap-abort-fix.patch": "5ee13eb1aefae04617b5e23e91be787ade9a98eae5fc4b55900a1a6f37e801d4",
+    "patches/android-13/system/bpf/0003-system-bpf-unprivileged-adaptation.patch": "c46de1f88a4078fdd8a1d5e293a717f20d19d017cf78b68d7aaaa0447da44760",
+    "patches/android-13/system/core/0002-system-core-unprivileged-container-adaptation.patch": "81998428666d3065f40f53226d78fbec10e33430beb8d78790887858569cbcb0",
+    "patches/android-13/system/memory/lmkd/0004-system-memory-lmkd-unprivileged-adaptation.patch": "b430a05ac94667cb3ebfb7525cf6878b73ed9d8d6ad726b28fa92143ad52e0fb",
+    "patches/android-13/vendor/redroid/0001-vendor-redroid-pve-lxc-post-fs-data.patch": "0d606a9b353abe2a4f8f92874d8beebc7ae8b9c1b388a32e126f11c9118695c1",
+    "patches/android-13/vendor/redroid/0007-native-dhcp-ipconfigstore.patch": "7148ca0db3c503d0c30f81d3f16b7d866be2b55fffa447bedaa819c295aa6fbd"
+  },
+  "evidence_files": {
+    "dhcp-2026-10-29.json": "7db253ef1650153a8f6149bc6b8174a89e8c4d5674207b705c0b29c16c6b3104",
+    "dhcp-2026-10-29.log": "35ba8f194d33413673fd12f66f92ea99a7fc938ab81e9bd91d2890179e2643dc",
+    "ipconfigstore-build.txt": "846d8b918ba220d0f901ca34153e5b51e3578324c4ef9681d6aed6c8de2acb63",
+    "services-build.txt": "d806415f1e9f452e2870089b3c16d683e041eefc56fc160fd74395c16b56225b",
+    "static-2026-10-29.json": "5cdf025e623f0ec1645b06e3fd899a4784faae8027bf8700e097073067056ad9"
+  }
+}

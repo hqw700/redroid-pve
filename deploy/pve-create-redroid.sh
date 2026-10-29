@@ -1,143 +1,87 @@
 #!/bin/bash
-set -e
-
-# ==============================================================================
-# ReDroid 13 原生 PVE (LXC) 容器一键创建与部署脚本
-# 运行环境：PVE 宿主机 (pve-155h / 192.168.100.2)
-# 支持模式：非特权模式 (默认推荐，unprivileged: 1) / 特权模式 (unprivileged: 0)
-# ==============================================================================
-
+# Native PVE entry point. Runtime rules are owned by pve-configure-redroid.
+set -euo pipefail
+if [[ "${1:-}" == --help ]]; then
+    echo 'Usage: pve-create-redroid VMID IP/CIDR|dhcp [GATEWAY|-] [CORES] [MEMORY_MB] [SWAP_MB] [DISK_GB] [TEMPLATE] [UNPRIVILEGED=1] [GPU_MODE=host] [--no-start] [--storage STORAGE] [--bridge BRIDGE]'
+    echo 'DHCP example: pve-create-redroid 201 dhcp (use - as the gateway placeholder when supplying resource arguments)'
+    exit 0
+fi
+ARGS=()
+START=1
+STORAGE=${REDROID_PVE_STORAGE:-local-lvm}
+BRIDGE=${REDROID_PVE_BRIDGE:-vmbr0}
+while (( $# )); do
+    case "$1" in
+        --no-start) START=0; shift ;;
+        --storage|--bridge)
+            option=$1
+            [ "$#" -ge 2 ] || { echo "Missing value for $option" >&2; exit 1; }
+            if [ "$option" = --storage ]; then STORAGE=$2; else BRIDGE=$2; fi
+            shift 2 ;;
+        --*) echo "Unknown option: $1" >&2; exit 1 ;;
+        *) ARGS+=("$1"); shift ;;
+    esac
+done
+[[ "$STORAGE" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ && "$BRIDGE" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ ]] || { echo 'Invalid storage or bridge name' >&2; exit 1; }
+set -- "${ARGS[@]}"
 VMID=${1:-201}
-IP=${2:-"192.168.100.201/24"}
-GW=${3:-"192.168.100.1"}
+IP=${2:-192.168.100.201/24}
+if [ "$IP" = dhcp ]; then
+    GW=${3:-}
+    [ -z "$GW" ] || [ "$GW" = - ] || { echo 'DHCP obtains the gateway automatically; omit it or use - as a placeholder' >&2; exit 1; }
+    GW=''
+else
+    GW=${3:-192.168.100.1}
+fi
 CORES=${4:-8}
 MEMORY=${5:-4096}
 SWAP=${6:-1024}
-DISK_SIZE=${7:-32}
-TEMPLATE=${8:-"/var/lib/vz/template/cache/redroid13_intel_latest.tar.zst"}
-UNPRIVILEGED=${9:-1} # 默认开启非特权模式 (1=非特权, 0=特权)
-GPU_MODE=${10:-"host"} # 默认开启宿主 GPU 硬件加速 (host/guest)
-
-if [ ! -f "$TEMPLATE" ]; then
-    # 自动检测 /var/lib/vz/template/cache/ 下最新的 redroid 模板
-    DETECTED_TPL=$(ls -t /var/lib/vz/template/cache/*redroid*.tar.zst 2>/dev/null | head -n 1 || true)
-    if [ -n "$DETECTED_TPL" ] && [ -f "$DETECTED_TPL" ]; then
-        TEMPLATE="$DETECTED_TPL"
-    else
-        echo "[ERROR] 未找到 ReDroid PVE 模板: $TEMPLATE"
-        echo "[HINT] 请先下载模板至 /var/lib/vz/template/cache/ 目录"
-        exit 1
-    fi
-fi
-
-echo "============================================================"
-echo " 开始创建 ReDroid 13 原生 PVE (LXC) 容器"
-echo " 容器 ID      : ${VMID}"
-echo " 静态 IP      : ${IP}"
-echo " 默认网关    : ${GW}"
-echo " CPU 核心数  : ${CORES} 核"
-echo " 内存大小    : ${MEMORY} MB (Swap: ${SWAP} MB)"
-echo " 磁盘大小    : ${DISK_SIZE} GB"
-echo " 运行模式    : $([ "$UNPRIVILEGED" = "1" ] && echo "非特权模式 (Unprivileged)" || echo "特权模式 (Privileged)")"
-echo " 模板路径    : ${TEMPLATE}"
-echo "============================================================"
-
-# 1. 如果已存在同名容器，先清理
+DISK=${7:-32}
+TEMPLATE=${8:-/var/lib/vz/template/cache/redroid13_intel_latest.tar.zst}
+UNPRIVILEGED=${9:-1}
+GPU_MODE=${10:-host}
+for value in "$VMID" "$CORES" "$MEMORY" "$SWAP" "$DISK"; do
+    [[ "$value" =~ ^[0-9]+$ ]] || { echo 'Invalid numeric argument' >&2; exit 1; }
+done
+[[ "$UNPRIVILEGED" =~ ^[01]$ && "$GPU_MODE" =~ ^(host|guest)$ ]] || { echo 'Invalid runtime mode' >&2; exit 1; }
+# Never destroy or overwrite an existing native PVE container.
 if pct status "$VMID" >/dev/null 2>&1; then
-    echo "[WARN] 容器 CT $VMID 已存在，正在销毁..."
-    pct stop "$VMID" >/dev/null 2>&1 || true
-    pct destroy "$VMID" --purge
+    echo "CT $VMID already exists; choose another VMID or use pve-configure-redroid on a stopped container" >&2
+    exit 1
 fi
-
-# 2. 确保 PVE Hook 脚本就绪
-mkdir -p /var/lib/vz/snippets /usr/share/lxc/hooks
-pvesm set local --content iso,vztmpl,snippets,import,backup >/dev/null 2>&1 || true
-
-# 3. 创建 PVE 原生容器
-echo "--> 1. 创建 PVE 原生容器 CT ${VMID}..."
-pct create ${VMID} "${TEMPLATE}" \
-  --ostype unmanaged \
-  --cores ${CORES} \
-  --memory ${MEMORY} \
-  --swap ${SWAP} \
-  --rootfs local-lvm:${DISK_SIZE} \
-  --net0 name=eth0,bridge=vmbr0,firewall=0,ip=${IP},gw=${GW},type=veth \
-  --cmode shell \
-  --unprivileged ${UNPRIVILEGED} \
-  --features nesting=1,mknod=1 \
-  --hookscript local:snippets/redroid-hook.sh \
-  --description "ReDroid 13 Native Android Cloud Phone (CT ${VMID})"
-
-# 4. 注入加固配置与运行参数
-echo "--> 2. 注入直通与 LXC 安全加固参数..."
-GPU_CMD="androidboot.redroid_gpu_mode=${GPU_MODE}"
-if [ "${GPU_MODE}" = "host" ]; then
-    GPU_CMD="${GPU_CMD} androidboot.redroid_gpu_node=/dev/dri/renderD128"
+if [ ! -f "$TEMPLATE" ] && [ -z "${8:-}" ]; then
+    TEMPLATE=$(find /var/lib/vz/template/cache -maxdepth 1 -type f -name '*redroid*.tar.zst' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
 fi
-
-cat << EOF >> /etc/pve/lxc/${VMID}.conf
-lxc.apparmor.profile: unconfined
-lxc.cap.drop:
-lxc.cap.drop: sys_boot
-lxc.mount.auto: proc:rw sys:mixed cgroup:rw
-lxc.hook.mount: /usr/share/lxc/hooks/redroid-pve-hook.sh
-lxc.init.cmd: /init androidboot.hardware=redroid ${GPU_CMD} androidboot.redroid_width=1080 androidboot.redroid_height=1920 androidboot.redroid_dpi=320 ro.boot.redroid_fps=60
-lxc.autodev: 0
-lxc.mount.entry: tmpfs dev tmpfs create=dir,rw,nosuid,size=134217728,mode=755 0 0
-EOF
-
-if [ "${UNPRIVILEGED}" = "1" ]; then
-    # 非特权模式 (Unprivileged)
-    cat << EOF >> /etc/pve/lxc/${VMID}.conf
-lxc.prlimit.nice: 40
-lxc.cgroup2.devices.allow: c 226:* rwm
-lxc.cgroup2.devices.allow: c 248:* rwm
-lxc.mount.entry: /dev/null dev/null none bind,create=file 0 0
-lxc.mount.entry: /dev/zero dev/zero none bind,create=file 0 0
-lxc.mount.entry: /dev/random dev/random none bind,create=file 0 0
-lxc.mount.entry: /dev/urandom dev/urandom none bind,create=file 0 0
-lxc.mount.entry: /dev/kmsg dev/kmsg none bind,create=file 0 0
-lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir 0 0
-lxc.mount.entry: /dev/dma_heap dev/dma_heap none bind,optional,create=dir 0 0
-EOF
-    # 宿主放行 kmsg 与 GPU 读写权限给容器普通映射用户
-    chmod 666 /dev/kmsg 2>/dev/null || true
-    chmod 666 /dev/dri/* 2>/dev/null || true
+[ -f "$TEMPLATE" ] || { echo "Template not found: $TEMPLATE; download the image to PVE first" >&2; exit 1; }
+command -v pve-configure-redroid >/dev/null
+NET0="name=eth0,bridge=$BRIDGE,firewall=0,ip=$IP,type=veth"
+if [ "$IP" = dhcp ]; then
+    # Validate support before allocating a disk or creating a CT.
+    pve-configure-redroid --check-dhcp --template "$TEMPLATE"
 else
-    # 特权模式 (Privileged)
-    cat << EOF >> /etc/pve/lxc/${VMID}.conf
-lxc.cgroup2.devices.allow: a
-lxc.mount.entry: /dev/dri dev/dri none bind,create=dir 0 0
-lxc.mount.entry: /dev/dma_heap dev/dma_heap none bind,create=dir 0 0
-lxc.mount.entry: /dev/fuse dev/fuse none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop-control dev/loop-control none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop0 dev/loop0 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop1 dev/loop1 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop2 dev/loop2 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop3 dev/loop3 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop4 dev/loop4 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop5 dev/loop5 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop6 dev/loop6 none bind,optional,create=file 0 0
-lxc.mount.entry: /dev/loop7 dev/loop7 none bind,optional,create=file 0 0
-EOF
+    NET0+=",gw=$GW"
 fi
-
-# 5. 启动容器
-echo "--> 3. 启动容器 CT ${VMID}..."
-pct start ${VMID}
-
-echo "============================================================"
-echo " 容器 CT ${VMID} 启动成功!"
-echo " 正在等待系统完全初始化 (sys.boot_completed)..."
-IP_ADDR=$(echo "$IP" | cut -d/ -f1)
-for i in $(seq 1 40); do
-    STATUS=$(pct exec ${VMID} -- /system/bin/getprop sys.boot_completed 2>/dev/null || true)
-    if [ "$STATUS" = "1" ]; then
-        echo "[SUCCESS] Android 13 初始化完成 (sys.boot_completed=1)!"
-        echo "ADB 连接命令: adb connect ${IP_ADDR}:5555"
+pct create "$VMID" "$TEMPLATE" --ostype unmanaged --cores "$CORES" --memory "$MEMORY" --swap "$SWAP" \
+    --rootfs "$STORAGE:$DISK" --net0 "$NET0" \
+    --unprivileged "$UNPRIVILEGED" --description "ReDroid Native Android (CT $VMID)"
+pve-configure-redroid "$VMID" --gpu-mode "$GPU_MODE" --json
+if [ "$START" = 0 ]; then
+    echo "CT $VMID configured; left stopped (--no-start)"
+    exit 0
+fi
+pct start "$VMID"
+for ((i=0; i<40; i++)); do
+    if [ "$(pct exec "$VMID" -- /system/bin/getprop sys.boot_completed 2>/dev/null || true)" = 1 ]; then
+        if [ "$IP" = dhcp ]; then
+            network=$(pve-configure-redroid "$VMID" --network-status --wait-network 40)
+            address=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ipv4"][0].split("/")[0])' <<< "$network")
+        else
+            address=${IP%/*}
+        fi
+        echo "CT $VMID: Android ready; adb connect ${address}:5555"
         exit 0
     fi
     sleep 1
 done
-
-echo "[INFO] 容器已运行，系统仍在启动中，请稍后执行: adb connect ${IP_ADDR}:5555"
+echo "CT $VMID is running, but Android boot readiness was not confirmed within 40 seconds" >&2
+exit 1

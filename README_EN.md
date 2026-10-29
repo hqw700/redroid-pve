@@ -193,3 +193,43 @@ m -j$(nproc)
 
 Apache-2.0 License. See [LICENSE](LICENSE).
 ReDroid is an open-source project by [remote-android](https://github.com/remote-android).
+
+## Runtime interface for PVE users and controllers (API 1)
+
+The deployment runtime is versioned independently of the Android image. Install it with `sudo ./deploy/install-hooks.sh`; existing `local` storage content settings are preserved while adding `snippets`.
+
+```bash
+pve-configure-redroid --version
+pve-configure-redroid 201 --gpu-mode guest --width 720 --height 1280 --dpi 320 --fps 60 --json
+pve-configure-redroid 201 --gpu-mode guest --dry-run --json
+pve-create-redroid 202 192.168.100.202/24 192.168.100.1 4 4096 1024 32 "" 1 guest --no-start
+```
+
+`pve-configure-redroid` applies the official runtime profile to an existing **stopped** CT. It detects the CT's privilege mode, owns Android/PVE runtime keys, retains unrelated bind mounts and snapshot sections, and does not create, start, stop, or destroy containers. An unrelated PVE hookscript is rejected instead of overwritten. Extra boot arguments must be individual `androidboot.*=value` or `ro.boot.*=value` tokens. GPU host mode requires the selected render node; use guest mode without GPU hardware.
+
+Native PVE GUI users can apply this profile after creating a stopped CT, then use PVE's normal power controls. No CloudPhone or remote-control Agent is required. `pve-create-redroid` retains its positional arguments and native default of unprivileged mode, but now refuses an existing VMID instead of deleting it. `--no-start` leaves the new CT stopped for optional integrations.
+
+Controllers should manage CPU/memory/storage through PVE, call this shared profile interface, append only their own integration mounts, and then start the CT. Never maintain a separate copy of Android device/network/FUSE/boot logic.
+
+Run regression tests with `python3 -m unittest discover -s tests -v`. Hardware boot tests remain necessary on a real PVE host.
+
+The native create script accepts `--storage <storage-id> --bridge <bridge-name>`, or the `REDROID_PVE_STORAGE` and `REDROID_PVE_BRIDGE` environment variables. Defaults remain `local-lvm` and `vmbr0` for existing callers.
+
+### Automatic IPv4 through DHCP (runtime 1.1.0 + image network API 1)
+
+**Android's native IpClient/DhcpClient** owns acquisition, renewal, expiry, DNS and routes. PVE provides the interface. Stopping the CT terminates its network processes; no host DHCP daemon is created. No CloudPhone, Agent, or recent PVE `host-managed` feature is required.
+
+The image must include both `0007-native-dhcp-ipconfigstore.patch` and `0008-alarm-fallback-listener-delivery.patch` (listener alarms without a kernel alarm driver). Older ipconfigstore binaries only generate static configuration: **updating host scripts alone cannot enable DHCP**. Existing static networking remains compatible.
+
+```bash
+pve-configure-redroid --check-dhcp --template /var/lib/vz/template/cache/redroid-dhcp.tar.zst
+pve-create-redroid 203 dhcp - 4 4096 0 32 /var/lib/vz/template/cache/redroid-dhcp.tar.zst
+# Use - in the gateway position when supplying resource arguments.
+pve-create-redroid 204 dhcp - 4 4096 0 32 /var/lib/vz/template/cache/redroid-dhcp.tar.zst 1 guest --no-start --bridge vmbr0
+# Read actual addresses; exit nonzero if acquisition times out.
+pve-configure-redroid 203 --network-status --wait-network 40
+```
+
+For a CT created through the native PVE GUI, select DHCP and apply `pve-configure-redroid <VMID> --json` while stopped. The profile derives `androidboot.redroid_net_mode=dhcp` from `net0` and removes the host DHCP management flag so that Android is the only DHCP client. Omit a static gateway; the selected bridge/VLAN must reach a DHCP server.
+
+The create command checks image support before allocating resources. The mount hook checks again before Android starts, including GUI-created CTs. Existing positional arguments, static defaults and the native unprivileged default remain compatible. See [networking notes](docs/networking.md) for implementation, upgrades and acceptance details.

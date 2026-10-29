@@ -1,0 +1,48 @@
+{
+  "production_before": {
+    "files": {
+      "/usr/local/bin/pve-configure-redroid": "fe23c5c3139a99ec4452f964a0f68faaf04848de7c211dbe566aec3133202c8b",
+      "/usr/local/bin/pve-create-redroid": "e12ab2feea5b97ce07c1b4ad410e428e59cf584ba2d0ab17c918933f18bea466",
+      "/usr/share/lxc/hooks/redroid-pve-hook.sh": "513d8ec1822fce28b71eee956fd6df7d2275ef337fc707c2a55ea7f148853d57",
+      "/var/lib/vz/snippets/redroid-hook.sh": "a1cb8fb9167299ec62a084ec1cdeb9aa8285d52eae65986b574f6e7f4f7fdec0",
+      "/etc/resolv.conf": "75ee804c2952afc96a2d99409d042bdc288bde752e4790b5de69c85666f2ac6f"
+    },
+    "routes": "default via 192.168.100.1 dev vmbr0 proto kernel onlink \n192.168.100.0/24 dev vmbr0 proto kernel scope link src 192.168.100.173 \n"
+  },
+  "initial": {
+    "vmid": 548902,
+    "mode": "static",
+    "provider": "redroid-hook",
+    "running": true,
+    "ready": true,
+    "ipv4": [
+      "192.0.2.60/24"
+    ],
+    "gateway": "192.0.2.1",
+    "dns": []
+  },
+  "android_booted": true,
+  "ping": "PING 192.0.2.1 (192.0.2.1) 56(84) bytes of data.\n64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=0.032 ms\n\n--- 192.0.2.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 0.032/0.032/0.032/0.000 ms\n",
+  "dns_ping": "",
+  "static_address_preserved": true,
+  "pass": true,
+  "ethernet_dump": "Current Ethernet state: \n  EthernetTracker\n  Ethernet State: enabled\n  Ethernet interface name filter: eth\\d\n  Default interface: eth0\n  Default interface mode: 1\n  Tethered interface requests: 0\n  Listeners: 0\n  IP Configurations:\n    eth0: IP assignment: STATIC\n    Static configuration: IP address 192.0.2.60/24 Gateway 192.0.2.1  DNS servers: [ 8.8.8.8 ] Domains \n    Proxy settings: NONE\n    \n  \n  Network Capabilities:\n  \n  EthernetNetworkFactory\n  Tracking interfaces:\n    eth0:NetworkInterfaceState{ iface: eth0, up: true, hwAddress: bc:24:11:81:01:36, networkCapabilities: [ Transports: ETHERNET Capabilities: NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=100000Kbps LinkDnBandwidth>=100000Kbps Specifier: <EthernetNetworkSpecifier (eth0)> UnderlyingNetworks: Null], networkAgent: com.android.server.ethernet.EthernetNetworkAgent@53eb2a1, ipClient: com.android.connectivity.android.net.ip.IpClientManager@fa54cc6,linkProperties: {InterfaceName: eth0 LinkAddresses: [ fe80::9198:689f:a622:8366/64,192.0.2.60/24 ] DnsAddresses: [ /8.8.8.8 ] Domains: null MTU: 0 TcpBufferSizes: 524288,1048576,3145728,524288,1048576,2097152 Routes: [ fe80::/64 -> :: eth0 mtu 0,192.0.2.0/24 -> 0.0.0.0 eth0 mtu 0,0.0.0.0/0 -> 192.0.2.1 eth0 mtu 0 ]}}\nHandler:\n  EthernetServiceImplHandler (android.os.Handler) {23afb4} @ 29231456\n  EthernetServiceImpl  Looper (EthernetServiceThread, tid 103) {7f2d7dd}\n  EthernetServiceImpl    (Total messages: 0, polling=true, quitting=false)\n",
+  "dhcp_log": "",
+  "production_after": {
+    "files": {
+      "/usr/local/bin/pve-configure-redroid": "fe23c5c3139a99ec4452f964a0f68faaf04848de7c211dbe566aec3133202c8b",
+      "/usr/local/bin/pve-create-redroid": "e12ab2feea5b97ce07c1b4ad410e428e59cf584ba2d0ab17c918933f18bea466",
+      "/usr/share/lxc/hooks/redroid-pve-hook.sh": "513d8ec1822fce28b71eee956fd6df7d2275ef337fc707c2a55ea7f148853d57",
+      "/var/lib/vz/snippets/redroid-hook.sh": "a1cb8fb9167299ec62a084ec1cdeb9aa8285d52eae65986b574f6e7f4f7fdec0",
+      "/etc/resolv.conf": "75ee804c2952afc96a2d99409d042bdc288bde752e4790b5de69c85666f2ac6f"
+    },
+    "routes": "default via 192.168.100.1 dev vmbr0 proto kernel onlink \n192.168.100.0/24 dev vmbr0 proto kernel scope link src 192.168.100.173 \n"
+  },
+  "production_unchanged": true,
+  "cleanup": {
+    "ct_gone": true,
+    "bridge_gone": true,
+    "snippet_gone": true
+  },
+  "ct_init_pid": 176783
+}

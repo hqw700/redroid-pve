@@ -1,0 +1,61 @@
+[1mbuild/make/core/soong_config.mk:209: [35mwarning: [0m[1mBOARD_PLAT_PUBLIC_SEPOLICY_DIR has been deprecated. Use SYSTEM_EXT_PUBLIC_SEPOLICY_DIRS instead.[0m
+[1mbuild/make/core/soong_config.mk:210: [35mwarning: [0m[1mBOARD_PLAT_PRIVATE_SEPOLICY_DIR has been deprecated. Use SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS instead.[0m
+============================================
+PLATFORM_VERSION_CODENAME=REL
+PLATFORM_VERSION=13
+TARGET_PRODUCT=redroid_x86_64
+TARGET_BUILD_VARIANT=userdebug
+TARGET_BUILD_TYPE=release
+TARGET_ARCH=x86_64
+TARGET_ARCH_VARIANT=x86_64
+TARGET_2ND_ARCH=x86
+TARGET_2ND_ARCH_VARIANT=x86_64
+HOST_ARCH=x86_64
+HOST_2ND_ARCH=x86
+HOST_OS=linux
+HOST_OS_EXTRA=Linux-6.17.2-1-pve-x86_64-Ubuntu-22.04-LTS
+HOST_CROSS_OS=windows
+HOST_CROSS_ARCH=x86
+HOST_CROSS_2ND_ARCH=x86_64
+HOST_BUILD_TYPE=release
+BUILD_ID=TQ3C.230901.001.B1
+OUT_DIR=out
+PRODUCT_SOONG_NAMESPACES=frameworks/av/services/audiopolicy/config
+============================================
+ninja: no work to do.
+No need to regenerate ninja file
+No need to regenerate ninja file
+No need to regenerate ninja file
+Starting ninja...
+[  5% 1/20] //frameworks/base/apex/jobscheduler/service:service-jobscheduler turbine [common]
+[ 14% 2/14] //frameworks/base/apex/jobscheduler/service:service-jobscheduler javac [common]
+warning: Supported source version 'RELEASE_9' from annotation processor 'android.processor.compat.changeid.ChangeIdProcessor' less than -source '11'
+warning: Supported source version 'RELEASE_9' from annotation processor 'android.processor.compat.unsupportedappusage.UnsupportedAppUsageProcessor' less than -source '11'
+2 warnings
+[ 21% 3/14] //frameworks/base/apex/jobscheduler/service:service-jobscheduler jarjar [common]
+[ 28% 4/14] //frameworks/base/services:services for javac [common]
+[ 35% 5/14] Copy: out/target/common/obj/JAVA_LIBRARIES/services_intermediates/classes.jar
+[ 42% 6/14] Copy: out/target/product/redroid_x86_64/obj/PACKAGING/proguard_dictionary_intermediates/out/target/common/obj/JAVA_LIBRARIES/services_intermediates/classes.jar
+[ 50% 7/14] //frameworks/base/services:services r8 [common]
+Warning: Missing class androidx.annotation.ChecksSdkIntAtLeast (referenced from: boolean com.android.modules.utils.build.SdkLevel.isAtLeastS() and 1 other context)
+Missing class androidx.annotation.NonNull (referenced from: boolean com.android.modules.utils.build.UnboundedSdkLevel.isAtLeast(java.lang.String) and 17 other contexts)
+Missing class androidx.annotation.Nullable (referenced from: android.content.ComponentName com.android.settingslib.RestrictedLockUtils$EnforcedAdmin.component and 2 other contexts)
+Missing class androidx.annotation.RequiresApi (referenced from: com.android.settingslib.RestrictedLockUtils$EnforcedAdmin com.android.settingslib.RestrictedLockUtils.getProfileOrDeviceOwner(android.content.Context, android.os.UserHandle) and 1 other context)
+Missing class androidx.annotation.VisibleForTesting (referenced from: java.lang.String[] com.android.net.module.util.NetdUtils.removeAndAddFlags(java.lang.String[], java.lang.String, java.lang.String))
+Missing class com.android.permission.persistence.RuntimePermissionsPersistence (referenced from: com.android.permission.persistence.RuntimePermissionsPersistence com.android.server.pm.Settings$RuntimePermissionPersistence.mPersistence and 5 other contexts)
+Missing class com.android.permission.persistence.RuntimePermissionsState$PermissionState (referenced from: java.util.List com.android.server.pm.Settings$RuntimePermissionPersistence.getPermissionsFromPermissionsState(com.android.server.pm.permission.LegacyPermissionState, int) and 1 other context)
+Missing class com.android.permission.persistence.RuntimePermissionsState (referenced from: void com.android.server.pm.Settings$RuntimePermissionPersistence.lambda$writeStateForUser$1(java.lang.Object, boolean, boolean, com.android.server.pm.permission.LegacyPermissionDataProvider, com.android.server.utils.WatchedArrayMap, int, com.android.server.utils.WatchedArrayMap, int, java.lang.String, android.os.Handler) and 2 other contexts)
+Missing class com.android.role.RoleManagerLocal (referenced from: int com.android.server.stats.pull.StatsPullAtomService.pullRoleHolderLocked(int, java.util.List))
+Missing class com.android.server.sdksandbox.SdkSandboxManagerLocal (referenced from: int com.android.server.am.ActivityManagerService.broadcastIntentLocked(com.android.server.am.ProcessRecord, java.lang.String, java.lang.String, android.content.Intent, java.lang.String, android.content.IIntentReceiver, int, java.lang.String, android.os.Bundle, java.lang.String[], java.lang.String[], java.lang.String[], int, android.os.Bundle, boolean, boolean, int, int, int, int, int, boolean, android.os.IBinder, int[]) and 4 other contexts)
+Missing class org.jacoco.agent.rt.IAgent (referenced from: int com.android.server.coverage.CoverageService$CoverageCommand.onDump() and 1 other context)
+Missing class org.jacoco.agent.rt.RT (referenced from: int com.android.server.coverage.CoverageService$CoverageCommand.onDump() and 1 other context)
+[ 57% 8/14] Copy: out/target/product/redroid_x86_64/obj/PACKAGING/proguard_usage_intermediates/JAVA_LIBRARIES/services_intermediates/proguard_usage.zip
+[ 64% 9/14] Copy: out/target/common/obj/JAVA_LIBRARIES/services_intermediates/proguard_dictionary
+[ 71% 10/14] Copy symbols with mapping: out/target/product/redroid_x86_64/obj/PACKAGING/proguard_dictionary_intermediates/out/target/common/obj/JAVA_LIBRARIES/services_intermediates/proguard_dictionary
+[ 78% 11/14] //frameworks/base/services:services align [common]
+[ 85% 12/14] Copy: out/target/common/obj/JAVA_LIBRARIES/services_intermediates/javalib.jar
+[ 92% 13/14] Copy: out/target/product/redroid_x86_64/obj/JAVA_LIBRARIES/services_intermediates/javalib.jar
+[100% 14/14] Install out/target/product/redroid_x86_64/system/framework/services.jar
+
+#### build completed successfully (38 seconds) ####
+

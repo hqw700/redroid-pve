@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-29",
+  "pve": "9.1.1",
+  "initial_failure": "Running kernel contained binder_linux.ko but module was not loaded and BinderFS was not registered; Android could not open /dev/binder or /dev/hwbinder.",
+  "upstream_revision": "a4e8ad1852385639840e14ccf219154908cd346f",
+  "runtime_version": "1.1.1",
+  "source_tree_sha256": "bfe1bf47cc6f469f12a834f554a1abad1a86c886cf4ca57fb2b330b17dc77a58",
+  "runtime_source_files": {
+    "LICENSE": "f4d9b0aad8ff9e650f5890fa3eeb7c1311479cab901f8a9b416a2d9acaf54266",
+    "VERSION": "cc52f678848b814373757b460383bf61960e4943c203735adde0a350b3e50989",
+    "install-hooks.sh": "c530049efb3b49e55bea518c99af426a6d91dedd1eb952034afc0e6745619076",
+    "pve-configure-redroid.py": "fa03c1422e1cfd7a16057a5b8b5efd3124438b6278dd53549a5e31432abd5d83",
+    "pve-create-redroid.sh": "521c90ff471f247afdce0479e926b8dfd1c8d1ab9e47cf043a47c990fb7a938b",
+    "redroid-hook.sh": "72315744ed2474f47c37a82302770ad3ba481bc283a124fe872760dd5e3f08a1",
+    "redroid-pve-hook.sh": "4d061361dd8661c468951b1554a6b03a43ad1c493d41ad33e8c9a12924e2a2f0"
+  },
+  "host_result": {
+    "container_status": "status: running",
+    "android_boot_completed": "1",
+    "network": {
+      "vmid": 215,
+      "mode": "dhcp",
+      "provider": "android",
+      "running": true,
+      "ready": true,
+      "ipv4": [
+        "192.168.100.141/24"
+      ],
+      "gateway": "192.168.100.1",
+      "dns": [
+        "192.168.100.1"
+      ]
+    },
+    "gpu": "GLES: Intel, Mesa Intel(R) Graphics (ADL-N), OpenGL ES 3.2 Mesa 24.0.8 (git-441f064c1c)",
+    "host": "pve-n100",
+    "vmid": 215,
+    "binder_module_loaded": true,
+    "autoload_configured": true,
+    "host_check": {
+      "api": 1,
+      "version": "1.1.1",
+      "kernel": "6.17.2-1-pve",
+      "ready": true,
+      "binderfs": true,
+      "details": ""
+    },
+    "pass": true
+  },
+  "linux_unittest": {
+    "run": 19,
+    "skipped": 0,
+    "pass": true
+  },
+  "host_reboot_tested": false,
+  "full_n100_dhcp_lease_matrix_repeated": false,
+  "pass": true
+}

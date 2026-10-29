@@ -17,6 +17,8 @@
 
 ---
 
+维护与接手文档见 [文档入口](docs/README.md)，包括架构、运行接口、原生 PVE 排障、管理台接入和开发发布；AI 编程代理先读 [AGENTS.md](AGENTS.md)。当前运行时为 API 1 / 1.1.1，镜像版本独立管理；DHCP 需要配套新镜像，不能直接用下方旧版静态网络镜像示例代替。
+
 ## 1. 架构特性与收益对比
 
 在传统方案中，在 PVE 运行 ReDroid 需要采用 **Docker-in-LXC (PVE ➔ Ubuntu LXC ➔ Docker ➔ ReDroid)** 嵌套架构。本项目通过重构根文件系统、自愈 APEX 动态链接、User Namespace 隔离与宿主机安全加固 Hook，实现了 **Android 直接作为 PVE 原生容器运行**，并支持以**非特权模式 (`unprivileged: 1`)** 启动：
@@ -66,6 +68,7 @@ cd /root/redroid-pve
 > 1. 开启 PVE `local` 存储对 `snippets` 的支持；
 > 2. 部署关键的安全加固挂载 Hook（杜绝容器破坏 PVE 宿主机 `pmxcfs` 或休眠物理机）；
 > 3. 安装 `pve-create-redroid` 到系统命令路径。
+> 4. 加载内核自带的 `binder_linux`，确认 BinderFS 可用并配置开机加载；内核缺少支持时明确失败。
 
 ---
 
@@ -82,7 +85,7 @@ pve-create-redroid 201 192.168.100.201/24 192.168.100.1
 pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 "" 0
 ```
 
-执行后，容器将在约 **5 秒内** 完成初始化并自动达到 `sys.boot_completed=1`！
+命令会启动容器并轮询 Android 开机状态，实际耗时取决于镜像、主机和资源，以 `sys.boot_completed=1` 为准。失败时先查看 PVE 任务日志，不要据此自动删除已有 CT。
 
 ---
 
@@ -195,8 +198,11 @@ source build/envsetup.sh
 lunch redroid_x86_64-userdebug
 m -j$(nproc)
 
-# 5. 生成 PVE 模板归档 (.tar.zst)
-./build/mk-pve-template.sh
+# 5. 将打包脚本放到实际 AOSP 根目录，使路径检测正确
+install -m 0755 /path/to/redroid-pve/build/mk-pve-template.sh ./mk-pve-template.sh
+# 运行前先阅读 docs/development.md：脚本会更新 latest，且可能自动分发至 pve-155h
+# 仅在已确认允许这些输出和分发动作时执行
+bash ./mk-pve-template.sh redroid13_x86_64_pve_candidate.tar.zst
 ```
 
 ---
@@ -227,7 +233,7 @@ pve-create-redroid 202 192.168.100.202/24 192.168.100.1 4 4096 1024 32 "" 1 gues
 
 原生创建脚本可用 `--storage <存储ID> --bridge <网桥名>` 指定系统盘存储和网桥，也可设置 `REDROID_PVE_STORAGE`、`REDROID_PVE_BRIDGE`；未指定时保留原有 `local-lvm` / `vmbr0` 默认值。
 
-### DHCP 自动获取 IPv4（运行脚本 1.1.0 + 镜像网络 API 1）
+### DHCP 自动获取 IPv4（运行脚本 1.1.1 + 镜像网络 API 1）
 
 DHCP 获取、续租、租约过期、DNS 和路由由 **Android 自带的 IpClient/DhcpClient** 管理。PVE 只提供网卡；容器停止时，这些进程随容器退出，没有宿主 DHCP 守护进程需要维护。不依赖 CloudPhone 或 Agent，也不要求新版 PVE 的 `host-managed` 功能。
 

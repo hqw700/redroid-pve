@@ -17,6 +17,8 @@
 
 ---
 
+See the [maintainer documentation (Chinese)](docs/README.md) for architecture, runtime APIs, native PVE troubleshooting, controller integration, and development/release procedures. Coding agents should read [AGENTS.md](AGENTS.md). The current runtime is API 1 / 1.1.1; image versions are independent. DHCP requires a matching newer image, rather than the older static-network image used in the download example below.
+
 ## 1. Architecture & Performance Comparison
 
 In traditional deployments, running ReDroid on Proxmox VE requires **Docker-in-LXC nesting** (`PVE ➔ Ubuntu LXC ➔ Docker Daemon ➔ ReDroid`). 
@@ -64,6 +66,7 @@ cd /root/redroid-pve
 > 1. Enables `snippets` content support on PVE `local` storage;
 > 2. Deploys security hooks that shield PVE's `pmxcfs` FUSE and prevent Android from suspending the physical host;
 > 3. Installs `pve-create-redroid` into `/usr/local/bin`.
+> 4. Loads the kernel's `binder_linux` module, verifies BinderFS and enables loading at boot; fails explicitly if the running kernel lacks support.
 
 ---
 
@@ -80,7 +83,7 @@ pve-create-redroid 201 192.168.100.201/24 192.168.100.1
 pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 "" 0
 ```
 
-The container will automatically initialize and reach `sys.boot_completed=1` in **~5 seconds**!
+The command starts the CT and polls Android readiness. Actual startup time depends on the image, host and resources; verify `sys.boot_completed=1`. Read the PVE task log on failure instead of automatically deleting an existing CT.
 
 ---
 
@@ -183,8 +186,11 @@ source build/envsetup.sh
 lunch redroid_x86_64-userdebug
 m -j$(nproc)
 
-# 5. Package PVE template (.tar.zst)
-./build/mk-pve-template.sh
+# 5. Place the packaging helper at the actual AOSP root for correct path detection
+install -m 0755 /path/to/redroid-pve/build/mk-pve-template.sh ./mk-pve-template.sh
+# First read docs/development.md: the helper updates latest and may copy to pve-155h
+# Run only when these outputs and distribution actions are authorized
+bash ./mk-pve-template.sh redroid13_x86_64_pve_candidate.tar.zst
 ```
 
 ---
@@ -215,7 +221,7 @@ Run regression tests with `python3 -m unittest discover -s tests -v`. Hardware b
 
 The native create script accepts `--storage <storage-id> --bridge <bridge-name>`, or the `REDROID_PVE_STORAGE` and `REDROID_PVE_BRIDGE` environment variables. Defaults remain `local-lvm` and `vmbr0` for existing callers.
 
-### Automatic IPv4 through DHCP (runtime 1.1.0 + image network API 1)
+### Automatic IPv4 through DHCP (runtime 1.1.1 + image network API 1)
 
 **Android's native IpClient/DhcpClient** owns acquisition, renewal, expiry, DNS and routes. PVE provides the interface. Stopping the CT terminates its network processes; no host DHCP daemon is created. No CloudPhone, Agent, or recent PVE `host-managed` feature is required.
 

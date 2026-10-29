@@ -25,6 +25,8 @@ print(','.join(sorted(contents)))
 PY
 )
 [ "${#STORAGE[@]}" -eq 2 ] || { echo 'Cannot read local PVE storage configuration' >&2; exit 1; }
+# Fail before changing PVE storage/hooks when the running kernel cannot run Android.
+python3 "${SCRIPT_DIR}/pve-configure-redroid.py" --prepare-host --json
 pvesm set local --content "${STORAGE[1]}"
 install -d "${STORAGE[0]}/snippets" /usr/share/lxc/hooks /usr/local/bin /usr/local/share/redroid-pve
 install -m 0755 "${SCRIPT_DIR}/redroid-hook.sh" "${STORAGE[0]}/snippets/redroid-hook.sh"

@@ -21,6 +21,62 @@ def options(**changes):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_host_check_is_read_only_and_observes_binderfs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            filesystem = Path(directory) / 'filesystems'
+            with patch.object(runtime, 'BINDER_FILESYSTEMS', filesystem), patch.object(runtime.subprocess, 'run') as run:
+                filesystem.write_text('nodev\tproc\nnodev\ttmpfs\n')
+                self.assertFalse(runtime.host_status()['ready'])
+                filesystem.write_text('nodev\tproc\nnodev\tbinder\n')
+                self.assertTrue(runtime.host_status()['ready'])
+                run.assert_not_called()
+
+    def test_host_preparation_loads_binder_and_preserves_autoload_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            filesystem = Path(directory) / 'filesystems'
+            autoload = Path(directory) / 'modules-load.d/redroid-pve.conf'
+            autoload.parent.mkdir()
+            original = '# Administrator settings\nuinput\n'
+            autoload.write_text(original)
+            autoload.chmod(0o640)
+            filesystem.write_text('nodev\tproc\n')
+            def load(command, **kwargs):
+                self.assertEqual(command, ['modprobe', 'binder_linux'])
+                filesystem.write_text('nodev\tproc\nnodev\tbinder\n')
+                return SimpleNamespace(returncode=0, stderr='')
+            with patch.object(runtime, 'BINDER_FILESYSTEMS', filesystem), patch.object(runtime, 'BINDER_AUTOLOAD', autoload), \
+                    patch.object(runtime.os, 'geteuid', return_value=0), patch.object(runtime.subprocess, 'run', side_effect=load) as run:
+                self.assertTrue(runtime.prepare_host()['ready'])
+                self.assertEqual(autoload.read_text(), original + 'binder_linux\n')
+                modified = autoload.stat().st_mtime_ns
+                self.assertTrue(runtime.prepare_host()['autoload_configured'])
+                self.assertEqual(autoload.stat().st_mtime_ns, modified)
+                self.assertEqual(autoload.stat().st_mode & 0o777, 0o640)
+                run.assert_called_once()
+
+    def test_missing_binder_module_or_binderfs_cannot_report_host_ready(self):
+        with tempfile.TemporaryDirectory() as directory:
+            filesystem = Path(directory) / 'filesystems'
+            autoload = Path(directory) / 'redroid-pve.conf'
+            filesystem.write_text('nodev\tproc\n')
+            for code, message in ((1, 'Cannot load binder_linux'), (0, 'BinderFS is unavailable')):
+                with self.subTest(exit=code), patch.object(runtime, 'BINDER_FILESYSTEMS', filesystem), \
+                        patch.object(runtime, 'BINDER_AUTOLOAD', autoload), patch.object(runtime.os, 'geteuid', return_value=0), \
+                        patch.object(runtime.subprocess, 'run', return_value=SimpleNamespace(returncode=code, stderr='module not found')):
+                    with self.assertRaisesRegex(ValueError, message):
+                        runtime.prepare_host()
+                    self.assertFalse(autoload.exists())
+
+    def test_host_preparation_rejects_non_root_and_mixed_ct_operations(self):
+        with patch.object(runtime.os, 'geteuid', return_value=1000), patch.object(runtime.subprocess, 'run') as run:
+            with self.assertRaisesRegex(ValueError, 'requires root'):
+                runtime.prepare_host()
+            run.assert_not_called()
+        for args in (['--check-host', '201'], ['--prepare-host', '--dry-run'], ['--prepare-host', '--check-dhcp']):
+            result = subprocess.run(['python3', str(ROOT / 'deploy/pve-configure-redroid.py'), *args], capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b'cannot be combined', result.stderr)
+
     def test_dhcp_uses_android_native_lifecycle_and_preserves_snapshots(self):
         original = 'unprivileged: 1\nnet0: name=eth0,bridge=vmbr7,ip=dhcp,host-managed=1,hwaddr=02:00:00:00:00:01,tag=20\n\n[snap_init]\nnet0: name=eth0,ip=192.0.2.10/24,gw=192.0.2.1\n'
         result = runtime.render(original, options())
@@ -201,6 +257,12 @@ class RuntimeTests(unittest.TestCase):
             for path in ['/usr/local/bin', '/usr/local/share/redroid-pve', '/usr/share/lxc/hooks']:
                 script = script.replace(path, str(directory) + path)
             (directory / 'install-hooks.sh').write_text(script)
+            filesystem = directory / 'filesystems'
+            filesystem.write_text('nodev\tbinder\n')
+            profile = directory / 'pve-configure-redroid.py'
+            profile.write_text(profile.read_text().replace('Path("/proc/filesystems")', 'Path(' + repr(str(filesystem)) + ')')
+                               .replace('Path("/etc/modules-load.d/redroid-pve.conf")', 'Path(' + repr(str(directory / 'redroid-pve.conf')) + ')')
+                               .replace('os.geteuid()', '0'))
             mockbin = directory / 'mockbin'
             mockbin.mkdir()
             for name, content in [('id', 'echo 0'), ('pvesm', 'echo "$*" >> "' + str(directory / 'storage-calls') + '"')]:

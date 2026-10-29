@@ -17,6 +17,12 @@ HOST_MANAGED=$(echo "$NET0_LINE" | grep -o 'host-managed=[^, ]*' | cut -d= -f2 |
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] CT $VMID hookscript phase: $PHASE" >> /tmp/pve-hook.log
 
+# A copied CT or a host reboot must not leave Android booting without BinderFS.
+# Keep this prerequisite in the official runtime for both native PVE and controllers.
+if [ "$PHASE" = pre-start ]; then
+    /usr/local/bin/pve-configure-redroid --prepare-host --json >/dev/null
+fi
+
 if [ "$PHASE" = pre-start ] && [ "$IP_VAL" = dhcp ]; then
     [ "$HOST_MANAGED" != 1 ] || {
         echo "CT $VMID: Android owns DHCP; run pve-configure-redroid on the stopped container to disable host-managed DHCP" >&2

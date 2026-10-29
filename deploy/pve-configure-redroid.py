@@ -7,6 +7,7 @@ mounts are preserved. No container is created, started, stopped or destroyed her
 import argparse
 import ipaddress
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -14,7 +15,9 @@ import time
 from pathlib import Path
 
 API_VERSION = 1
-RUNTIME_VERSION = "1.1.0"
+RUNTIME_VERSION = "1.1.1"
+BINDER_FILESYSTEMS = Path("/proc/filesystems")
+BINDER_AUTOLOAD = Path("/etc/modules-load.d/redroid-pve.conf")
 BEGIN = "# BEGIN redroid-pve runtime"
 END = "# END redroid-pve runtime"
 HOOK = "/usr/share/lxc/hooks/redroid-pve-hook.sh"
@@ -27,6 +30,9 @@ def arguments():
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--json", action="store_true", help="machine-readable result")
     parser.add_argument("--dry-run", action="store_true", help="render without writing")
+    host = parser.add_mutually_exclusive_group()
+    host.add_argument("--check-host", action="store_true", help="read host BinderFS readiness without loading modules or changing files")
+    host.add_argument("--prepare-host", action="store_true", help="load the host BinderFS driver and enable loading at boot; no CT changes")
     parser.add_argument("--check-dhcp", action="store_true", help="check a template's native Android DHCP support without changing a CT")
     parser.add_argument("--template", type=Path, help="PVE .tar.zst template to check with --check-dhcp")
     parser.add_argument("--network-status", action="store_true", help="read actual IPv4 addresses/routes from the running CT; no configuration changes")
@@ -39,6 +45,34 @@ def arguments():
     parser.add_argument("--device-id", default="")
     parser.add_argument("--extra-boot-args", default="")
     return parser, parser.parse_args()
+
+
+def host_status():
+    binderfs = any(line.split()[-1:] == ['binder'] for line in BINDER_FILESYSTEMS.read_text().splitlines())
+    return {'api': API_VERSION, 'version': RUNTIME_VERSION, 'kernel': os.uname().release,
+            'ready': binderfs, 'binderfs': binderfs,
+            'details': '' if binderfs else 'BinderFS is unavailable; run pve-configure-redroid --prepare-host on the PVE host'}
+
+
+def prepare_host():
+    if os.geteuid() != 0:
+        raise ValueError('--prepare-host requires root on the PVE host')
+    state = host_status()
+    if not state['ready']:
+        result = subprocess.run(['modprobe', 'binder_linux'], capture_output=True, text=True, timeout=15)
+        if result.returncode:
+            raise ValueError(f"Cannot load binder_linux for kernel {state['kernel']}: {result.stderr.strip()}; install matching kernel modules with CONFIG_ANDROID_BINDER_IPC and CONFIG_ANDROID_BINDERFS")
+        state = host_status()
+        if not state['ready']:
+            raise ValueError('binder_linux loaded but BinderFS is unavailable; the host kernel must enable CONFIG_ANDROID_BINDERFS')
+    # Preserve any existing administrator settings; write only when adding the module.
+    text = BINDER_AUTOLOAD.read_text() if BINDER_AUTOLOAD.exists() else '# ReDroid BinderFS support\n'
+    modules = [line.split('#', 1)[0].strip() for line in text.splitlines()]
+    if 'binder_linux' not in modules:
+        BINDER_AUTOLOAD.parent.mkdir(parents=True, exist_ok=True)
+        BINDER_AUTOLOAD.write_text(text + ('' if text.endswith('\n') else '\n') + 'binder_linux\n')
+    state['autoload_configured'] = True
+    return state
 
 
 def validate(args):
@@ -250,6 +284,11 @@ def main():
     parser, args = arguments()
     if args.version:
         print(json.dumps({"api": API_VERSION, "version": RUNTIME_VERSION}))
+        return
+    if args.check_host or args.prepare_host:
+        if args.vmid is not None or args.dry_run or args.check_dhcp or args.network_status or args.wait_network:
+            raise ValueError('host checks/preparation cannot be combined with CT, image or dry-run operations')
+        print(json.dumps(prepare_host() if args.prepare_host else host_status()))
         return
     if args.check_dhcp:
         print(json.dumps({'api': API_VERSION, 'version': RUNTIME_VERSION, **require_dhcp_support(args.template)}))

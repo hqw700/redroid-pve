@@ -1,0 +1,3 @@
+<send_user_message_question_reply>
+[{"questionItemId":"[\"request_user_input_async\",\"call_5cd01ee140884b5a8fe22b9e7cfe24f0\",0]","question":"修复已在临时 CT 验证通过。是否现在部署到原实例 CT 214（192.168.100.132）？这需要备份并替换两份 libcutils.so，再重启该 CT，会中断其中正在运行的应用。当前排查和隔离验证没有改动原实例。","answer":"部署并重启 CT 214"}]
+</send_user_message_question_reply>

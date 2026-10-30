@@ -1,0 +1,1 @@
+这是一个开源项目，关联本地/Volumes/m2/code/redroid-x86-gpu，这里有更多redroid的功能实现。关联/Volumes/m2/code/cloudphone, 这里提供pve编排功能。

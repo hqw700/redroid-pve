@@ -1,0 +1,1 @@
+运行机器在ssh pve-155h, 代码在ssh pve-build:/home/aosp/source/redroid13-pve

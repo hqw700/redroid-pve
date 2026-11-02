@@ -1,0 +1,293 @@
+{
+  "release": "v0.0.3",
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "source_ref": "refs/tags/v0.0.3",
+  "runtime_version": "1.1.1",
+  "runtime_api": 1,
+  "android": "13",
+  "architecture": "x86_64",
+  "artifact": {
+    "name": "redroid13_x86_64_pve_template_v0.0.3.tar.zst",
+    "bytes": 652875593,
+    "sha256": "fac191efabe2390d8d0748787c6699b6df18010177fa418cb650d9f9f22dda5a",
+    "archive_members": 5047,
+    "data_directory_empty": true,
+    "acceptance_apps_and_probes_bundled": false
+  },
+  "build": {
+    "image_build_date": "2026-10-30",
+    "packaging_date": "2026-11-02",
+    "system_img_sha256": "afef1a7562266904e06abb079b09011d033cf49d876a6a149b0a8bb066c1341d",
+    "vendor_img_sha256": "143ffb77439e2ed8b3c9fc8aef820859d44731d158c8f2df0b95c94769561e5c",
+    "source_projects": {
+      "external/toybox": {
+        "base_revision": "0bcc122a5164a08bf543281c125e93ffbe18180a",
+        "worktree_diff_sha256": "340b8c235eeea8fd26f852abf25cd85fb43124c5e30ff4ea0357aee543cdc56d"
+      },
+      "frameworks/base": {
+        "base_revision": "2391f0824ac30b5fba264f01fc6e4ae75db9c2f4",
+        "worktree_diff_sha256": "f1db3949b9442441a390158b7c349acbda336c0a4744d52c1c0b09322f64ce84"
+      },
+      "frameworks/libs/net": {
+        "base_revision": "c06cd3d82cca984e28baefa233d8f93073b0d745",
+        "worktree_diff_sha256": "5ee13eb1aefae04617b5e23e91be787ade9a98eae5fc4b55900a1a6f37e801d4"
+      },
+      "system/bpf": {
+        "base_revision": "0efd8b90c9731fe1f3f0bfb0af08109ac81c8ce9",
+        "worktree_diff_sha256": "c46de1f88a4078fdd8a1d5e293a717f20d19d017cf78b68d7aaaa0447da44760"
+      },
+      "system/core": {
+        "base_revision": "9f708bda7113acdc0710465f75bada30f8cd4c2b",
+        "worktree_diff_sha256": "413b98ca2a7908b772b6595b72fcec0d718b948377fd5605543ce943a6722e50"
+      },
+      "system/memory/lmkd": {
+        "base_revision": "0431b65e6c5c2dbc838d91e9fa9af515c85b9f14",
+        "worktree_diff_sha256": "b430a05ac94667cb3ebfb7525cf6878b73ed9d8d6ad726b28fa92143ad52e0fb"
+      },
+      "vendor/redroid": {
+        "base_revision": "34f541106f22233eeefdd59d845bca20c1932955",
+        "worktree_diff_sha256": "d41d37e6b1f5a3cb0de79a782056eefb9d5a241115effaa2a10340be373f70a4"
+      }
+    },
+    "all_nine_patches_reverse_check": true,
+    "packaging": "Repository packer working copy with pipefail and required component checks, a dedicated candidate output and temporary rootfs; latest and automatic distribution steps disabled. Original packer not changed.",
+    "latest_aliases_updated": false
+  },
+  "component_metadata": {
+    "init": {
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o777",
+      "size": 0,
+      "symlink": "/system/bin/init"
+    },
+    "system/lib64/libcutils.so": {
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "size": 88640,
+      "symlink": null,
+      "sha256": "9b77712eaffccd9fb3d7e5ac6d4eb292092f42bb4df06d6f7444e70a6e5fcbc9"
+    },
+    "system/framework/services.jar": {
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "size": 17696672,
+      "symlink": null,
+      "sha256": "7602fd19b01057874a5af4b134d248c53a7c5a6f7030fae4ccb801ddc55f3d6f"
+    },
+    "system/bin/init": {
+      "uid": 0,
+      "gid": 2000,
+      "mode": "0o755",
+      "size": 2368936,
+      "symlink": null,
+      "sha256": "111b02191fc7e43f4f50144c15fe875c5a609610c21b1e5d61769f0397985ca7"
+    },
+    "system/lib/libcutils.so": {
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "size": 79620,
+      "symlink": null,
+      "sha256": "50373356fe717ec5aa3a215c154c4129815a921f3afda84957451b06ea764b5a"
+    },
+    "vendor/bin/ipconfigstore": {
+      "uid": 0,
+      "gid": 2000,
+      "mode": "0o755",
+      "size": 15872,
+      "symlink": null,
+      "sha256": "608abe9b765d33370a8f9c25791d51f1b9516743439f04f2892ed77d954072be"
+    },
+    "sbin/init": {
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o777",
+      "size": 0,
+      "symlink": "/init"
+    },
+    "sbin/entrypoint.sh": {
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o755",
+      "size": 199,
+      "symlink": null,
+      "sha256": "1214351c09eb814f1f9e8a6b9f4934d23c08a4111db3e395d74cc3f613ac1987"
+    }
+  },
+  "patches_sha256": {
+    "patches/android-13/external/toybox/0006-external-toybox-accurate-cpu-mem-for-containers.patch": "340b8c235eeea8fd26f852abf25cd85fb43124c5e30ff4ea0357aee543cdc56d",
+    "patches/android-13/frameworks/base/0008-alarm-fallback-listener-delivery.patch": "2974897f1fc453662ed68f1fb2e6d3e59e514e9967a1a07d4d9aaebe15d2359d",
+    "patches/android-13/frameworks/libs/net/0005-frameworks-libs-net-bpfmap-abort-fix.patch": "5ee13eb1aefae04617b5e23e91be787ade9a98eae5fc4b55900a1a6f37e801d4",
+    "patches/android-13/system/bpf/0003-system-bpf-unprivileged-adaptation.patch": "c46de1f88a4078fdd8a1d5e293a717f20d19d017cf78b68d7aaaa0447da44760",
+    "patches/android-13/system/core/0002-system-core-unprivileged-container-adaptation.patch": "81998428666d3065f40f53226d78fbec10e33430beb8d78790887858569cbcb0",
+    "patches/android-13/system/core/0009-seal-memfd-region-size.patch": "31fc7bf75ddb8738f0f769d822bdf2a65120d958aa638f48ce19352f78b400b4",
+    "patches/android-13/system/memory/lmkd/0004-system-memory-lmkd-unprivileged-adaptation.patch": "b430a05ac94667cb3ebfb7525cf6878b73ed9d8d6ad726b28fa92143ad52e0fb",
+    "patches/android-13/vendor/redroid/0001-vendor-redroid-pve-lxc-post-fs-data.patch": "0d606a9b353abe2a4f8f92874d8beebc7ae8b9c1b388a32e126f11c9118695c1",
+    "patches/android-13/vendor/redroid/0007-native-dhcp-ipconfigstore.patch": "7148ca0db3c503d0c30f81d3f16b7d866be2b55fffa447bedaa819c295aa6fbd"
+  },
+  "runtime_source_sha256": {
+    "deploy/VERSION": "cc52f678848b814373757b460383bf61960e4943c203735adde0a350b3e50989",
+    "deploy/install-hooks.sh": "c530049efb3b49e55bea518c99af426a6d91dedd1eb952034afc0e6745619076",
+    "deploy/pve-configure-redroid.py": "fa03c1422e1cfd7a16057a5b8b5efd3124438b6278dd53549a5e31432abd5d83",
+    "deploy/pve-create-redroid.sh": "521c90ff471f247afdce0479e926b8dfd1c8d1ab9e47cf043a47c990fb7a938b",
+    "deploy/redroid-hook.sh": "72315744ed2474f47c37a82302770ad3ba481bc283a124fe872760dd5e3f08a1",
+    "deploy/redroid-pve-hook.sh": "4d061361dd8661c468951b1554a6b03a43ad1c493d41ad33e8c9a12924e2a2f0"
+  },
+  "acceptance": {
+    "scope": "Fresh full-template startup; no component replacement in either test CT. Isolated bridge without physical uplink; DHCP/DNS server in a dedicated network namespace. Existing user CTs untouched.",
+    "pve": "9.1.1",
+    "kernel": "6.17.2-1-pve",
+    "gpu": "Intel Mesa Arc Graphics (MTL), OpenGL ES 3.2 Mesa 24.0.8 (git-441f064c1c)",
+    "gpu_mode": "host",
+    "resolution": "720x1280",
+    "webview": "156.0.8078.47",
+    "xbrowser": "5.6.4 (1092)",
+    "unprivileged": {
+      "default_id_mapping": true,
+      "android_boot_completed": true,
+      "gpu_renderer_identified": true,
+      "network": "dhcp",
+      "dhcp_acquisition": true,
+      "dns_query_and_ping": true,
+      "repeated_renewals": true,
+      "server_paused_for_seconds": 65,
+      "expired": {
+        "vmid": 9303,
+        "mode": "dhcp",
+        "provider": "android",
+        "running": true,
+        "ready": false,
+        "ipv4": [],
+        "gateway": "",
+        "dns": []
+      },
+      "recovered": {
+        "vmid": 9303,
+        "mode": "dhcp",
+        "provider": "android",
+        "running": true,
+        "ready": true,
+        "ipv4": [
+          "192.0.2.50/24"
+        ],
+        "gateway": "192.0.2.1",
+        "dns": [
+          "192.0.2.1"
+        ]
+      },
+      "memfd_seals": "0x6",
+      "native_tests_64": {
+        "run": 6,
+        "passed": 6
+      },
+      "native_tests_32": {
+        "run": 6,
+        "passed": 6
+      },
+      "webview_rendering_passed": false,
+      "webview_failure": "setresgid(99000 and subsequent sandbox GIDs) failed: Invalid argument; sandbox GIDs outside default PVE unprivileged mapping. Blank page visually confirmed. Successful activity launch was not treated as rendering acceptance.",
+      "xbrowser_cold_launch_commands_succeeded": 2,
+      "xbrowser_rendering_passed": false,
+      "restart_boot_and_network": true,
+      "stopped": {
+        "vmid": 9303,
+        "mode": "dhcp",
+        "provider": "android",
+        "running": false,
+        "ready": false,
+        "ipv4": [],
+        "gateway": "",
+        "dns": []
+      }
+    },
+    "privileged": {
+      "android_boot_completed": true,
+      "gpu_renderer_identified": true,
+      "network": "static",
+      "static_ipv4_and_routes": true,
+      "memfd_seals": "0x6",
+      "native_tests_64": {
+        "run": 6,
+        "passed": 6
+      },
+      "native_tests_32": {
+        "run": 6,
+        "passed": 6
+      },
+      "webview_local_data_url_and_javascript_visually_passed": true,
+      "xbrowser_cold_launches_passed": 2,
+      "xbrowser_initial_license_dialog_visible": true,
+      "license_accepted": false,
+      "restart_boot_and_network": true,
+      "webview_javascript_after_restart_visually_passed": true,
+      "stopped": {
+        "vmid": 9304,
+        "mode": "static",
+        "provider": "redroid-hook",
+        "running": false,
+        "ready": false,
+        "ipv4": [],
+        "gateway": "",
+        "dns": []
+      }
+    },
+    "native_test_32_dependency": "libjsoncpp.so supplied only in a temporary directory using LD_LIBRARY_PATH; no system library replacements.",
+    "checks": {
+      "linux_python_unittest": {
+        "run": 19,
+        "passed": 19,
+        "skipped": 0,
+        "environment": "Linux AOSP build CT; unit tests, not installer deployment"
+      },
+      "macos_python_unittest": {
+        "run": 19,
+        "passed": 18,
+        "skipped": 1
+      },
+      "shell_syntax": true,
+      "diff_check_excluding_patches_and_evidence": true,
+      "archive_entry_points_components_permissions": true
+    }
+  },
+  "limitations": [
+    "Default unprivileged WebView rendering failed due to sandbox GID mapping. No privilege or ID mapping fallback was applied.",
+    "Startup crash buffers contained allocator SIGFPE even at 720x1280; Android recovered and completed the listed checks. Earlier 1080x1920 failures remain unresolved.",
+    "Bluetooth service aborts were observed; Bluetooth functionality was not accepted.",
+    "No Internet browsing, complete application feature matrix, remote display/input, additional GPU/PVE/kernel combinations, ARM64 or other Android releases were accepted.",
+    "Creation default remains unprivileged, host GPU, 1080x1920; 720x1280 was explicit for this acceptance."
+  ],
+  "cleanup": {
+    "temporary_cts_removed": true,
+    "isolated_bridge_removed": true,
+    "server_namespace_removed": true,
+    "original_vm_ids_and_statuses_unchanged": true,
+    "shared_runtime_storage_config_and_resolv_conf_unchanged": true,
+    "host_addresses_and_routes_unchanged": true
+  },
+  "raw_evidence": {
+    "retained_privately": true,
+    "local_run_log_sha256": {
+      "archive-inspection.json": "68e4a6f26513463b96e67209e90937782471b5ec27815ce9a37ff8100b814d3c",
+      "cleanup.log": "18a3d1cd7a34b5ecb0364cd97c4eff2501bf87c60fcfe751c9af19168c22e52f",
+      "create-privileged.log": "c3e16e479c189b0ef48ecccdf3f89387cf5e597c62d76b7e14671cdd99cb9a73",
+      "create.log": "0ea48f3a2da8d2737e6983c42441d4f44490156f485d2f369e4c65ef5aac4b73",
+      "network.log": "b77755bfc572cb832448108e8502c13aef04ccceeb2a6f5024dc45da41c38d59",
+      "pack.log": "8ec934fb5f535e5ef69f122ce70f43562ff1cd593df45b0650e92af1f1349edc",
+      "restart.log": "e21e389f9a82e9700770cca3720d7d41e76e73ad2b5ffbd8998de8263de5181b",
+      "setup.log": "1de4484caaa8c122f8f1086b9338a7a60e721ee78feda59f505bd1c4f378af14",
+      "verify-privileged.log": "a2101413c2f80c7e2fb54df35be5c8ab8ab42f666f8c4312370d8a3ebb10713a",
+      "verify.log": "266e3cb45bf36b91eecc5a440c72963a326bbca03e580549d60da968fe4bffaa",
+      "visual-restart.log": "ad630865e8bcaedb22225d21ef7f16c10fb88fbd1efaa6ec746031b32e394293",
+      "webview-privileged.png": "826d801e87245c171ac9b23d42ace18597676083dd856d54fcfb9587f451cb46",
+      "webview-restarted.png": "e8a28d6e5dc075291c6b27f24cab2255974f7b3278bc102e7b518741d5006f02",
+      "webview.png": "24fd5662c02cee183724dcc93d811f5627278060171892a6e31a656e72592df9",
+      "xbrowser-privileged.png": "ca4c3f16c692be0e81f8b81e13c1eac596001b302de978860d9096feb7ca743a",
+      "xbrowser.png": "c784640f3a2add45a010fd8f8f8c1fb1620947377cf8f6cb4c8572332ee5811f"
+    },
+    "host_evidence_archive_sha256": "4eb112ddd0778d4ee77412f7ae073c55602415868bc5cd9f5f43c3bac679c3d6"
+  }
+}

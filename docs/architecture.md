@@ -71,6 +71,7 @@ flowchart TD
 | 0006 | `external/toybox` | 容器 CPU/内存统计适配 |
 | 0007 | `vendor/redroid` | DHCP/STATIC 区分及 ipconfigstore 错误处理 |
 | 0008 | `frameworks/base` | 无内核闹钟驱动时投递 DHCP listener 闹钟 |
+| 0009 | `system/core` | memfd 固定尺寸保护，兼容新版 WebView 共享内存校验 |
 
 0007 和 0008 是 DHCP 的配套要求。检查标记只证明模板具备声明的网络组件，不能证明 Framework、DNS、续租和整机开机全部可用。
 

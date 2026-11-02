@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-30",
+  "timezone": "Asia/Shanghai",
+  "android": "13",
+  "pve": "9.1.1",
+  "kernel": "6.17.2-1-pve",
+  "runtime_version": "1.1.1",
+  "scope": "Component validation in a disposable privileged CT with host GPU, 720x1280, on an isolated bridge without a physical uplink; followed by user-authorized deployment to the original CT.",
+  "webview": {
+    "package": "com.android.webview",
+    "version": "156.0.8078.47",
+    "native_build_id": "6393d9dfa16370feedc7c22689eb0485c132dfa3",
+    "apk_sha256": "dc97ebe686577a7683c64f67bf42b488fdfbf9356c027fe65514e708174b2100"
+  },
+  "application": {
+    "package": "com.mmbox.xbrowser",
+    "version": "5.6.4",
+    "version_code": 1092
+  },
+  "root_cause": "Android 13 libcutils creates unsealed memfds; this Chromium version requires F_SEAL_GROW and F_SEAL_SHRINK before accepting a memfd as a shared memory region.",
+  "chromium_source": "https://chromium.googlesource.com/chromium/src/+/156.0.8078.47/base/android/linker/ashmem.cc",
+  "system_core_base_revision": "9f708bda7113acdc0710465f75bada30f8cd4c2b",
+  "patch": {
+    "path": "patches/android-13/system/core/0009-seal-memfd-region-size.patch",
+    "sha256": "31fc7bf75ddb8738f0f769d822bdf2a65120d958aa638f48ce19352f78b400b4",
+    "forward_check_on_original_files": true,
+    "reverse_check_on_build_tree": true,
+    "all_nine_patches_reverse_check": true
+  },
+  "artifacts_sha256": {
+    "libcutils64.so": "9b77712eaffccd9fb3d7e5ac6d4eb292092f42bb4df06d6f7444e70a6e5fcbc9",
+    "libcutils32.so": "50373356fe717ec5aa3a215c154c4129815a921f3afda84957451b06ea764b5a"
+  },
+  "baseline": {
+    "ndk_memfd_seals": "0x0",
+    "native_memfd_tests_64": {
+      "run": 2,
+      "failed": 2
+    },
+    "xbrowser": "SIGILL at libwebviewchromium.so + 0x3bab603; process exited"
+  },
+  "patched": {
+    "ndk_memfd_seals": "0x6",
+    "native_tests_64": {
+      "run": 6,
+      "passed": 6
+    },
+    "native_tests_32": {
+      "run": 6,
+      "passed": 6,
+      "test_only_dependency": "libjsoncpp.so supplied via LD_LIBRARY_PATH in a temporary directory"
+    },
+    "xbrowser": "Two cold launches returned Status: ok; process remained alive and initial license dialog was visible. License was not accepted.",
+    "webview_shell": "Cold launch returned Status: ok; screenshot verified a local data URL page and JavaScript-updated PASS text.",
+    "gpu": "Intel Mesa Arc Graphics (MTL), OpenGL ES 3.2 Mesa 24.0.8 (git-441f064c1c)"
+  },
+  "local_checks": {
+    "python_unittest": {
+      "run": 19,
+      "skipped": 1,
+      "passed": true,
+      "limitation": "Installer tests skipped on macOS; not full Linux/PVE runtime acceptance"
+    },
+    "shell_syntax": true,
+    "diff_check_excluding_existing_patches_and_evidence": true
+  },
+  "limitations": [
+    "No Internet connectivity or full browser feature matrix tested; rendering test uses a local data URL.",
+    "No host ashmem module installed, no host IPC sharing, and no original CT mode change.",
+    "Initial temporary CT attempts at 1080x1920 hit a gralloc SIGFPE before WebView testing, in both privilege modes; only the privileged 720x1280 setup completed this acceptance. This separate graphics problem was not fixed.",
+    "An initial native test attempt before Android readiness failed; retained privately and repeated after sys.use_memfd=1 and Android boot completion.",
+    "32-bit baseline test could not load libjsoncpp.so; only the 64-bit baseline provides the negative control.",
+    "Component validation does not constitute full rebuilt-image startup acceptance."
+  ],
+  "template_sha256": "a24146e814beb7a27e5ae2094a76d2fb09bf326c6715639c820321378ef3747a",
+  "cleanup": {
+    "temporary_ct_removed": true,
+    "isolated_bridge_removed": true,
+    "original_vm_ids_and_statuses_unchanged": true
+  },
+  "image_build": {
+    "targets": [
+      "systemimage",
+      "vendorimage"
+    ],
+    "passed": true,
+    "boot_tested": false,
+    "packaged": false,
+    "distributed": false,
+    "artifacts_sha256": {
+      "system.img": "afef1a7562266904e06abb079b09011d033cf49d876a6a149b0a8bb066c1341d",
+      "vendor.img": "143ffb77439e2ed8b3c9fc8aef820859d44731d158c8f2df0b95c94769561e5c"
+    }
+  },
+  "deployment": {
+    "user_authorized": true,
+    "vmid": 214,
+    "original_libraries_backed_up": true,
+    "original_ownership_and_permissions_preserved": true,
+    "ct_configuration_unchanged": true,
+    "ct_restarted": true,
+    "android_boot_completed": true,
+    "network_ready": true,
+    "ipv4": [
+      "192.168.100.132/24"
+    ],
+    "ndk_memfd_seals": "0x6",
+    "xbrowser_cold_launch": "Status: ok, TotalTime 407 ms, PID 2389 remained alive; screenshot verified initial license dialog over the browser home screen. License was not accepted.",
+    "post_restart_crash_buffer_has_xbrowser_sigill": false,
+    "full_image_deployed": false
+  }
+}

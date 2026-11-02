@@ -94,4 +94,6 @@ PVE GUI 用户可先选择新版镜像创建停止的 CT，将 `net0` 设为 DHC
 
 本次验收镜像由此前已验证的 v0.0.2 模板替换新编译的 `ipconfigstore` 和 `services.jar` 后重新打包，移除了旧的 services 预编译缓存。镜像保存在构建机 `pve-build:/home/aosp/source/redroid13-pve/release/candidates/redroid13_x86_64_pve_template_network-api1_20261029.tar.zst`，配有同名 `.sha256` 文件。SHA256：`a24146e814beb7a27e5ae2094a76d2fb09bf326c6715639c820321378ef3747a`。这是验收候选产物，尚未发布为公开镜像，也没有替换既有模板或 `latest` 链接。
 
+2026-11-02 后续交付：v0.0.3 从完整构建的 system/vendor 打包，另行完成隔离 DHCP 获取、DNS、续租、过期、恢复与重启验收，见 [v0.0.3 发布说明](releases/v0.0.3.zh-CN.md)和[本轮证据](evidence/release-v0.0.3-2026-11-02.json)。上述候选镜像段落保留 2026-10-29 的历史状态。
+
 English summary: DHCP is owned by Android's native networking stack. Apply both patches 0007 and 0008, build ipconfigstore and services, and publish a matching image. The isolated PVE acceptance covered acquisition, DNS, renewal, expiry, recovery, reboot, stop cleanup and static IPv4 compatibility. Updating host scripts alone does not add DHCP support to an old image. The CloudPhone development tree now consumes these interfaces; deploy its matching backend and frontend separately.

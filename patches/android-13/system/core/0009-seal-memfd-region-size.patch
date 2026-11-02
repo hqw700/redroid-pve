@@ -1,0 +1,82 @@
+diff --git a/libcutils/ashmem-dev.cpp b/libcutils/ashmem-dev.cpp
+--- a/libcutils/ashmem-dev.cpp
++++ b/libcutils/ashmem-dev.cpp
+@@ -349,6 +349,13 @@
+         return -1;
+     }
+ 
++    // Match ashmem's fixed-size regions. Consumers such as Chromium reject
++    // memfds that can still be resized after they are shared with another process.
++    if (fcntl(fd, F_ADD_SEALS, F_SEAL_GROW | F_SEAL_SHRINK) == -1) {
++        ALOGE("memfd_create(%s, %zd): size seals failed: %s\n", name, size, strerror(errno));
++        return -1;
++    }
++
+     if (debug_log) {
+         ALOGE("memfd_create(%s, %zd) success. fd=%d\n", name, size, fd.get());
+     }
+diff --git a/libcutils/ashmem_test.cpp b/libcutils/ashmem_test.cpp
+--- a/libcutils/ashmem_test.cpp
++++ b/libcutils/ashmem_test.cpp
+@@ -280,3 +280,61 @@
+         EXPECT_EQ(0, munmap(region, size));
+     }
+ }
++
++// memfd-backed ashmem regions must have the same immutable size as ashmem.
++TEST(AshmemTest, MemfdSizeSeals) {
++    for (size_t size : {size_t{0}, size_t{1}, size_t{PAGE_SIZE}, size_t{PAGE_SIZE + 1}}) {
++        unique_fd fd(ashmem_create_region("size-seals-test", size));
++        ASSERT_GE(fd.get(), 0);
++        int seals = fcntl(fd, F_GET_SEALS);
++        if (seals == -1 && errno == EINVAL) {
++            GTEST_SKIP() << "ashmem driver in use; this test requires memfd";
++        }
++        ASSERT_GE(seals, 0);
++        EXPECT_EQ(F_SEAL_GROW | F_SEAL_SHRINK, seals & (F_SEAL_GROW | F_SEAL_SHRINK));
++        EXPECT_EQ(0, seals & (F_SEAL_WRITE | F_SEAL_FUTURE_WRITE | F_SEAL_SEAL));
++        EXPECT_EQ(0, ftruncate(fd, size));
++        errno = 0;
++        EXPECT_EQ(-1, ftruncate(fd, size + 1));
++        EXPECT_EQ(EPERM, errno);
++        if (size != 0) {
++            errno = 0;
++            EXPECT_EQ(-1, ftruncate(fd, size - 1));
++            EXPECT_EQ(EPERM, errno);
++        }
++        EXPECT_EQ(size, static_cast<size_t>(ashmem_get_size_region(fd)));
++        unique_fd copy(dup(fd));
++        ASSERT_GE(copy.get(), 0);
++        EXPECT_EQ(seals, fcntl(copy, F_GET_SEALS));
++    }
++}
++
++TEST(AshmemTest, MemfdSizeSealsAllowReadOnlyConversion) {
++    unique_fd fd(ashmem_create_region("size-seals-prot-test", PAGE_SIZE));
++    ASSERT_GE(fd.get(), 0);
++    int seals = fcntl(fd, F_GET_SEALS);
++    if (seals == -1 && errno == EINVAL) {
++        GTEST_SKIP() << "ashmem driver in use; this test requires memfd";
++    }
++    ASSERT_GE(seals, 0);
++    auto* writable = static_cast<char*>(mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE,
++                                           MAP_SHARED, fd, 0));
++    ASSERT_NE(MAP_FAILED, writable);
++    writable[0] = 'a';
++    EXPECT_EQ(0, ashmem_set_prot_region(fd, PROT_READ));
++    seals = fcntl(fd, F_GET_SEALS);
++    EXPECT_EQ(F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_FUTURE_WRITE,
++              seals & (F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_FUTURE_WRITE));
++    // An existing writable mapping remains usable; future writable mappings fail.
++    writable[0] = 'b';
++    void* denied = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++    EXPECT_EQ(MAP_FAILED, denied);
++    if (denied != MAP_FAILED) munmap(denied, PAGE_SIZE);
++    void* readonly = mmap(nullptr, PAGE_SIZE, PROT_READ, MAP_SHARED, fd, 0);
++    EXPECT_NE(MAP_FAILED, readonly);
++    if (readonly != MAP_FAILED) {
++        EXPECT_EQ('b', static_cast<char*>(readonly)[0]);
++        EXPECT_EQ(0, munmap(readonly, PAGE_SIZE));
++    }
++    EXPECT_EQ(0, munmap(writable, PAGE_SIZE));
++}

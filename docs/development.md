@@ -49,6 +49,45 @@ m -j8 systemimage vendorimage
 
 其他模块变更按其真实构建依赖选择目标；需要完整系统验证时执行完整构建。只编译一个二进制、只复制源码或只替换宿主脚本，都不能代表完整镜像已更新。
 
+## WebView 与 memfd 兼容
+
+没有 `/dev/ashmem` 的宿主使用 Android 的 memfd 路径。0009 补丁在
+`system/core/libcutils/ashmem-dev.cpp` 创建并调整 memfd 大小后添加
+`F_SEAL_GROW | F_SEAL_SHRINK`，使共享区域的大小与 ashmem 一样不可变。
+[Chromium 156.0.8078.47](https://chromium.googlesource.com/chromium/src/+/156.0.8078.47/base/android/linker/ashmem.cc)
+会拒绝没有这两个 seals 的 memfd；Android 13 原始实现没有添加它们。
+`sys.use_memfd=1` 只能启用创建路径，不能证明其结果满足 WebView 的校验。
+
+此类故障可能表现为 WebView 初始化时的保护属性查询失败及后续 SIGILL。
+错误日志中的 errno 不足以证明实际执行过 ashmem ioctl，也不能据此要求
+安装外部 ashmem 模块、切换特权模式或共享宿主 IPC。
+
+构建与定向回归（在 AOSP 构建环境执行）：
+
+```bash
+m -j8 libcutils libcutils_test
+```
+
+将目标产物 `data/nativetest64/libcutils_test/libcutils_test` 和
+`data/nativetest/libcutils_test/libcutils_test` 分别复制到隔离 CT 的
+`/data/local/tmp/libcutils_test64`、`/data/local/tmp/libcutils_test32`。
+等待 `sys.boot_completed=1`、确认 `sys.use_memfd=1` 后分别运行；缺少的测试依赖
+只放到临时目录并通过 `LD_LIBRARY_PATH` 提供，不为运行测试覆盖系统库：
+
+```bash
+/data/local/tmp/libcutils_test64 --gtest_filter='AshmemTest.Memfd*:AshmemTest.BasicTest:AshmemTest.ForkTest:AshmemTest.FileOperationsTest:AshmemTest.ForkMultiRegionTest'
+/data/local/tmp/libcutils_test32 --gtest_filter='AshmemTest.Memfd*:AshmemTest.BasicTest:AshmemTest.ForkTest:AshmemTest.FileOperationsTest:AshmemTest.ForkMultiRegionTest'
+```
+
+新测试覆盖零尺寸、非页对齐尺寸、禁止增大/缩小、重复描述符及只读转换后
+已有映射和新映射的行为。真正使用 ashmem 驱动时，memfd 专项测试会跳过。
+既有 `ProtTest`、`ForkProtTest` 直接依赖 ashmem ioctl，不在此 memfd 定向集合内。
+还需验证实际 `ASharedMemory_create()` 结果、WebView shell 和目标浏览器的启动、
+页面渲染及重启；单独替换库只属于组件验证，正式镜像仍需构建和验收。
+本次组件验收范围及限制见 [WebView memfd 验收记录](evidence/webview-memfd-2026-10-30.json)。
+原因、具体修改和原实例部署经过见 [WebView 排障记录](webview-memfd.md)。
+2026-11-02 的 v0.0.3 完整模板打包和整镜像验收另见 [发布记录](evidence/release-v0.0.3-2026-11-02.json)，其中分别记录特权页面渲染通过与非特权 GID 映射失败，不扩大此前组件验收的历史范围。
+
 ## 模板打包的当前行为
 
 `build/mk-pve-template.sh` 根据**脚本所在目录**及其父目录推断 AOSP 路径；`OUT` 只选择输入镜像目录，不改变推断出的 release 目录。直接从 AOSP 根目录调用外部仓库 `build/` 中的脚本，不保证推断正确。

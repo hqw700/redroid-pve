@@ -46,9 +46,13 @@ Log into your PVE host (as root) and download the pre-built, highly compressed t
 ```bash
 cd /var/lib/vz/template/cache/
 
-# Download the v0.0.1 Android 13 x86_64 template image (~620MB)
-wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.1/redroid13_x86_64_pve_template_2026-10-26.tar.zst
+# Download the v0.0.3 Android 13 x86_64 template image (~623 MiB)
+wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.3/redroid13_x86_64_pve_template_v0.0.3.tar.zst
+wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.3/redroid13_x86_64_pve_template_v0.0.3.tar.zst.sha256
+sha256sum -c redroid13_x86_64_pve_template_v0.0.3.tar.zst.sha256
 ```
+
+v0.0.3 uses runtime 1.1.1 / API 1. See the [release notes](docs/releases/v0.0.3.en.md) for changes, acceptance and known limitations. WebView rendering fails with the default unprivileged GID mapping; GPU/Bluetooth startup crashes were also observed.
 
 ---
 
@@ -57,7 +61,7 @@ wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.1/redroid13_x8
 Clone this repository on your PVE host and run the one-click initializer:
 
 ```bash
-git clone https://github.com/hqw700/redroid-pve.git /root/redroid-pve
+git clone --branch v0.0.3 https://github.com/hqw700/redroid-pve.git /root/redroid-pve
 cd /root/redroid-pve
 ./deploy/install-hooks.sh
 ```
@@ -77,10 +81,10 @@ Run the creation command with your desired VMID, static IP/CIDR, and gateway (**
 ```bash
 # Syntax: pve-create-redroid <VMID> <StaticIP/CIDR> <Gateway> [Cores] [RAM_MB] [Swap_MB] [Disk_GB] [Template] [Unprivileged]
 # Example 1: Create CT 201 in Unprivileged Mode (unprivileged: 1, default)
-pve-create-redroid 201 192.168.100.201/24 192.168.100.1
+pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 /var/lib/vz/template/cache/redroid13_x86_64_pve_template_v0.0.3.tar.zst
 
 # Example 2: Create CT 201 in Privileged Mode (unprivileged: 0, for special kernel pass-through)
-pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 "" 0
+pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 /var/lib/vz/template/cache/redroid13_x86_64_pve_template_v0.0.3.tar.zst 0
 ```
 
 The command starts the CT and polls Android readiness. Actual startup time depends on the image, host and resources; verify `sys.boot_completed=1`. Read the PVE task log on failure instead of automatically deleting an existing CT.
@@ -157,7 +161,7 @@ lxc.init.cmd: /init androidboot.hardware=redroid androidboot.redroid_gpu_mode=gu
 
 | Android Version | API Level | x86_64 | ARM64 | Status |
 | :---: | :---: | :---: | :---: | :---: |
-| **Android 13** | API 33 | ✅ Supported (Unprivileged) | 🔄 Planned | **GA Stable (Recommended)** |
+| **Android 13** | API 33 | ✅ Supported (Unprivileged) | 🔄 Planned | **See v0.0.3 acceptance scope** |
 | **Android 11** | API 30 | 🔄 Adapting | 🔄 Planned | Best for ultra-low memory |
 | **Android 14** | API 34 | 🔄 Planned | 🔄 Planned | Modern compatibility |
 | **Android 15** | API 35 | ⏳ Evaluating | ⏳ Evaluating | Cutting edge |

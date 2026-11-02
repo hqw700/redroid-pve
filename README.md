@@ -45,9 +45,13 @@
 # 登录 PVE 宿主机 (root 权限)
 cd /var/lib/vz/template/cache/
 
-# 下载发布的 v0.0.1 Android 13 x86_64 模板镜像 (约 620MB)
-wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.1/redroid13_x86_64_pve_template_2026-10-26.tar.zst
+# 下载发布的 v0.0.3 Android 13 x86_64 模板镜像 (约 623 MiB)
+wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.3/redroid13_x86_64_pve_template_v0.0.3.tar.zst
+wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.3/redroid13_x86_64_pve_template_v0.0.3.tar.zst.sha256
+sha256sum -c redroid13_x86_64_pve_template_v0.0.3.tar.zst.sha256
 ```
+
+v0.0.3 使用运行时 1.1.1 / API 1；变更、验收范围与已知限制见[中文发布说明](docs/releases/v0.0.3.zh-CN.md)。默认非特权映射下 WebView 沙箱 GID 超出范围，页面渲染尚未通过；另有 GPU/蓝牙启动崩溃记录。
 
 ---
 
@@ -57,7 +61,7 @@ wget https://github.com/hqw700/redroid-pve/releases/download/v0.0.1/redroid13_x8
 
 ```bash
 # 克隆仓库
-git clone https://github.com/hqw700/redroid-pve.git /root/redroid-pve
+git clone --branch v0.0.3 https://github.com/hqw700/redroid-pve.git /root/redroid-pve
 
 # 执行一键加固与环境初始化
 cd /root/redroid-pve
@@ -79,10 +83,10 @@ cd /root/redroid-pve
 ```bash
 # 语法: pve-create-redroid <容器VMID> <静态IP/掩码> <默认网关> [CPU核数] [内存MB] [SwapMB] [磁盘GB] [模板路径] [非特权标志]
 # 示例 1：默认以非特权模式 (unprivileged: 1) 创建 CT 201
-pve-create-redroid 201 192.168.100.201/24 192.168.100.1
+pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 /var/lib/vz/template/cache/redroid13_x86_64_pve_template_v0.0.3.tar.zst
 
 # 示例 2：以特权模式 (unprivileged: 0) 创建（若需要直通特殊内核节点）
-pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 "" 0
+pve-create-redroid 201 192.168.100.201/24 192.168.100.1 8 4096 1024 32 /var/lib/vz/template/cache/redroid13_x86_64_pve_template_v0.0.3.tar.zst 0
 ```
 
 命令会启动容器并轮询 Android 开机状态，实际耗时取决于镜像、主机和资源，以 `sys.boot_completed=1` 为准。失败时先查看 PVE 任务日志，不要据此自动删除已有 CT。
@@ -167,7 +171,7 @@ lxc.init.cmd: /init androidboot.hardware=redroid androidboot.redroid_gpu_mode=gu
 
 | Android 版本 | API 级别 | x86_64 架构 | ARM64 架构 | 状态 |
 | :---: | :---: | :---: | :---: | :---: |
-| **Android 13** | API 33 | ✅ 官方支持 (支持非特权) | 🔄 规划中 | **GA 稳定版 (推荐)** |
+| **Android 13** | API 33 | ✅ 官方支持 (支持非特权) | 🔄 规划中 | **验收范围见 v0.0.3 发布说明** |
 | **Android 11** | API 30 | 🔄 适配中 | 🔄 规划中 | 极低内存挂机首选 |
 | **Android 14** | API 34 | 🔄 规划中 | 🔄 规划中 | 高版本兼容性首选 |
 | **Android 15** | API 35 | ⏳ 评估中 | ⏳ 评估中 | 前沿特性跟进 |

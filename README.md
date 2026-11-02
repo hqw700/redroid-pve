@@ -17,7 +17,9 @@
 
 ---
 
-维护与接手文档见 [文档入口](docs/README.md)，包括架构、运行接口、原生 PVE 排障、管理台接入和开发发布；AI 编程代理先读 [AGENTS.md](AGENTS.md)。当前运行时为 API 1 / 1.1.1，镜像版本独立管理；DHCP 需要配套新镜像，不能直接用下方旧版静态网络镜像示例代替。
+维护与接手文档见 [文档入口](docs/README.md)，包括架构、运行接口、原生 PVE 排障、管理台接入和开发发布；AI 编程代理先读 [AGENTS.md](AGENTS.md)。当前运行时为 API 1 / 1.1.1，镜像版本独立管理；下方 v0.0.3 模板已包含配套 DHCP 补丁，旧镜像不会因升级宿主运行时而自动获得 DHCP 支持。
+
+也可以搭配 [ScrcpyOverWebRTC（CloudPhone 管理台）](https://github.com/hqw700/ScrcpyOverWebRTC)，通过网页开通 PVE 原生云手机并进行投屏与操作，流程见下方“CloudPhone 管理台开通与网页控制”。
 
 ## 1. 架构特性与收益对比
 
@@ -109,6 +111,33 @@ scrcpy -s 192.168.100.201:5555
   <img src="assets/settings_screen.png" width="45%" alt="Android 13 Settings (Unprivileged Mode)" />
   <img src="assets/unprivileged_screen.png" width="45%" alt="Android 13 Launcher (Unprivileged Mode)" />
 </p>
+
+---
+
+### 可选：CloudPhone 管理台开通与网页控制
+
+[ScrcpyOverWebRTC](https://github.com/hqw700/ScrcpyOverWebRTC) 提供 CloudPhone 管理台，可与本项目的 Android 模板和官方运行时配合，集中开通、启停和查看 PVE 云手机，并通过浏览器进行 WebRTC 投屏与键盘、触控操作。管理台部署方式见[该项目说明](https://github.com/hqw700/ScrcpyOverWebRTC#readme)。
+
+1. **准备 PVE 节点**：安装本项目官方运行时，将匹配的 Android 模板下载到节点的模板存储。使用支持本项目运行接口的 CloudPhone 版本；DHCP 需配套镜像，并通过实际模板能力检查。
+2. **接入集群**：进入管理台的“PVE 容器编排 → PVE 集群设置”，配置目标节点的 PVE API 与 SSH 连接，确认连接指向同一节点，并完成运行环境预检。
+3. **开通实例**：点击“开通新实例”，选择集群、镜像模板、系统盘存储、CPU/内存、分辨率与 GPU 模式，配置网桥及 DHCP 或静态地址，核对概览后提交。
+4. **管理与控制**：在 PVE 实例列表查看任务结果、资源和启停状态；待 Android 开机、网络就绪且 Agent 注册后，进入“虚机”页面查看画面并打开浏览器直控。
+
+本项目维护 Android/PVE 基础运行规则；CloudPhone 管理台维护资源编排、自己的 Agent 与连接配置。原生 PVE 创建、启停和 ADB/scrcpy 路径仍可独立使用，管理台及其 Agent 是可选集成。接入细节见[管理台接入契约](docs/integrations.md)。
+
+**开通原生云手机：选择模板、规格、显示参数与网络。**
+
+![CloudPhone 开通 PVE 原生云手机，选择 redroid-pve 模板、宿主 GPU 和 DHCP](assets/cloudphone-provision.png)
+
+**PVE 实例管理：查看节点资源、实例状态并执行启停。**
+
+![CloudPhone PVE 实例管理与云手机侧边控制面板](assets/cloudphone-pve-instances.png)
+
+**虚机列表与浏览器直控：查看多台设备画面并操作选中的云手机。**
+
+![CloudPhone 虚机列表和 WebRTC 浏览器控制界面](assets/cloudphone-web-control.png)
+
+截图由实际管理台提供，节点、地址、资源和显示参数仅为示例；管理台预设与原生脚本默认值分别管理。画面展示不代表所有应用或硬件组合均已验收，兼容范围仍以[版本发布说明](docs/releases/v0.0.3.zh-CN.md)为准。
 
 ---
 

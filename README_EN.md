@@ -17,7 +17,9 @@
 
 ---
 
-See the [maintainer documentation (Chinese)](docs/README.md) for architecture, runtime APIs, native PVE troubleshooting, controller integration, and development/release procedures. Coding agents should read [AGENTS.md](AGENTS.md). The current runtime is API 1 / 1.1.1; image versions are independent. DHCP requires a matching newer image, rather than the older static-network image used in the download example below.
+See the [maintainer documentation (Chinese)](docs/README.md) for architecture, runtime APIs, native PVE troubleshooting, controller integration, and development/release procedures. Coding agents should read [AGENTS.md](AGENTS.md). The current runtime is API 1 / 1.1.1; image versions are independent. The v0.0.3 template below includes the matching DHCP patches. Updating the host runtime does not add DHCP support to an older image.
+
+You can also use [ScrcpyOverWebRTC (the CloudPhone console)](https://github.com/hqw700/ScrcpyOverWebRTC) to provision native PVE cloud phones and control them from a browser. See “Provisioning and browser control with CloudPhone” below.
 
 ## 1. Architecture & Performance Comparison
 
@@ -107,6 +109,33 @@ scrcpy -s 192.168.100.201:5555
   <img src="assets/settings_screen.png" width="45%" alt="Android 13 Settings (Unprivileged Mode)" />
   <img src="assets/unprivileged_screen.png" width="45%" alt="Android 13 Launcher (Unprivileged Mode)" />
 </p>
+
+---
+
+### Optional: Provisioning and browser control with CloudPhone
+
+[ScrcpyOverWebRTC](https://github.com/hqw700/ScrcpyOverWebRTC) provides the CloudPhone console. Together with this project's Android templates and official runtime, it lets you provision, start, stop and monitor PVE cloud phones, then use WebRTC screen streaming and keyboard/touch control from a browser. See the [CloudPhone project instructions](https://github.com/hqw700/ScrcpyOverWebRTC#readme) for console deployment.
+
+1. **Prepare the PVE node**: Install the official runtime and download a matching Android template to the node's template storage. Use a CloudPhone version that supports this project's runtime interface. DHCP requires a matching image and a capability check against the actual template.
+2. **Connect the cluster**: Open “PVE 容器编排 → PVE 集群设置” (PVE orchestration → cluster settings). Configure the node's PVE API and SSH connections, confirm that both reach the same node, and complete the runtime preflight checks.
+3. **Provision an instance**: Click “开通新实例” (create instance). Select the cluster, template, disk storage, CPU/memory, resolution and GPU mode. Choose a bridge and DHCP or static addressing, review the configuration, and submit.
+4. **Manage and control**: Check task results, resources and power state in the PVE instance list. Once Android has booted, networking is ready and the Agent is registered, open “虚机” (devices) to view the screen and control the selected cloud phone in your browser.
+
+This project maintains the Android/PVE runtime rules. CloudPhone owns resource orchestration, its Agent and connection configuration. Native PVE creation, power controls and ADB/scrcpy remain usable independently; the console and its Agent are optional integrations. See the [controller integration contract](docs/integrations.md).
+
+**Provision a native cloud phone: choose the template, resources, display and networking.**
+
+![CloudPhone provisioning form with a redroid-pve template, host GPU and DHCP](assets/cloudphone-provision.png)
+
+**Manage PVE instances: inspect node resources, instance state and power controls.**
+
+![CloudPhone PVE instance management and cloud phone control panel](assets/cloudphone-pve-instances.png)
+
+**Device list and browser control: view multiple screens and operate the selected cloud phone.**
+
+![CloudPhone device list and WebRTC browser control](assets/cloudphone-web-control.png)
+
+These screenshots show an actual console. Nodes, addresses, resources and display settings are examples; console presets and native script defaults are managed separately. Screen previews do not establish acceptance for every application or hardware combination. See the [release notes](docs/releases/v0.0.3.en.md) for the tested scope.
 
 ---
 

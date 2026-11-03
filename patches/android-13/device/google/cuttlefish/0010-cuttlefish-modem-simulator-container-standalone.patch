@@ -1,0 +1,343 @@
+[detached HEAD fcd68a9] feat(modem): adapt cuttlefish modem_simulator and rild for in-container self-sustained operation and dynamic radio interface
+ 5 files changed, 154 insertions(+), 37 deletions(-)
+From fcd68a9fa2737f21eec081c17ac2196486d96d8c Mon Sep 17 00:00:00 2001
+From: huangqw <hqw700@qq.com>
+Date: Tue, 3 Nov 2026 11:20:23 +0000
+Subject: [PATCH] feat(modem): adapt cuttlefish modem_simulator and rild for
+ in-container self-sustained operation and dynamic radio interface
+
+Change-Id: Ie6a282be128d7a9cae738d4be640850f5561ef2d
+---
+ guest/hals/ril/reference-ril/reference-ril.c  |  12 +-
+ guest/hals/rild/rild_cuttlefish.c             |   8 +-
+ .../modem_simulator/cf_device_config.cpp      | 122 +++++++++++++++---
+ .../modem_simulator/channel_monitor.cpp       |  15 +--
+ host/commands/modem_simulator/main.cpp        |  34 +++--
+ 5 files changed, 154 insertions(+), 37 deletions(-)
+
+diff --git a/guest/hals/ril/reference-ril/reference-ril.c b/guest/hals/ril/reference-ril/reference-ril.c
+index f3d01e4..cbe596a 100644
+--- a/guest/hals/ril/reference-ril/reference-ril.c
++++ b/guest/hals/ril/reference-ril/reference-ril.c
+@@ -795,10 +795,20 @@ static void requestCallSelection(
+ 
+ static const char* getRadioInterfaceName()
+ {
++    static char s_radio_ifname[PROP_VALUE_MAX] = {0};
++    if (s_radio_ifname[0] != '\0') {
++        return s_radio_ifname;
++    }
++    if (property_get("ro.boot.radio_ifname", s_radio_ifname, "") > 0 && s_radio_ifname[0] != '\0') {
++        return s_radio_ifname;
++    }
++    if (property_get("vendor.redroid.radio_ifname", s_radio_ifname, "") > 0 && s_radio_ifname[0] != '\0') {
++        return s_radio_ifname;
++    }
+     if (isInEmulator()) {
+         return EMULATOR_RADIO_INTERFACE;
+     }
+-    return PPP_TTY_PATH_ETH0;
++    return "rmnet0";
+ }
+ 
+ static void requestOrSendDataCallList(int cid, RIL_Token *t)
+diff --git a/guest/hals/rild/rild_cuttlefish.c b/guest/hals/rild/rild_cuttlefish.c
+index 49f34ec..5f8f6a3 100644
+--- a/guest/hals/rild/rild_cuttlefish.c
++++ b/guest/hals/rild/rild_cuttlefish.c
+@@ -200,7 +200,13 @@ int main(int argc, char **argv) {
+     RLOGD("RIL_Init argc = %d clientId = %s", argc, rilArgv[argc-1]);
+ 
+     if (strcmp(port, "")) {
+-      rilArgv[argc++] = "-m";
++      char sim_type[PROPERTY_VALUE_MAX] = {0};
++      property_get("ro.boot.modem_simulator_type", sim_type, "tcp");
++      if (strcmp(sim_type, "vsock") == 0) {
++        rilArgv[argc++] = "-m";
++      } else {
++        rilArgv[argc++] = "-p";
++      }
+       rilArgv[argc++] = port;
+     }
+ 
+diff --git a/host/commands/modem_simulator/cf_device_config.cpp b/host/commands/modem_simulator/cf_device_config.cpp
+index 1201db5..6217759 100644
+--- a/host/commands/modem_simulator/cf_device_config.cpp
++++ b/host/commands/modem_simulator/cf_device_config.cpp
+@@ -14,14 +14,79 @@
+  * limitations under the License.
+  */
+ 
++#include <arpa/inet.h>
++#include <ifaddrs.h>
++#include <net/if.h>
++
++#include <android-base/properties.h>
++
+ #include "common/libs/device_config/device_config.h"
+ #include "host/commands/modem_simulator/device_config.h"
+ #include "host/libs/config/cuttlefish_config.h"
+ 
+-// this file provide cuttlefish hooks
+ namespace cuttlefish {
+ namespace modem {
+ 
++static bool probe_interface_ipv4(const std::string& ifname, std::string* ip, int* prefix, std::string* gw) {
++  struct ifaddrs* ifaddr = nullptr;
++  if (getifaddrs(&ifaddr) == -1 || !ifaddr) {
++    return false;
++  }
++  bool found = false;
++  for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
++    if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
++    if (ifa->ifa_name && ifname == ifa->ifa_name) {
++      char ip_str[INET_ADDRSTRLEN] = {0};
++      auto* sa = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
++      inet_ntop(AF_INET, &(sa->sin_addr), ip_str, INET_ADDRSTRLEN);
++      if (ip) *ip = ip_str;
++
++      if (prefix && ifa->ifa_netmask) {
++        auto* mask_sa = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_netmask);
++        uint32_t mask = ntohl(mask_sa->sin_addr.s_addr);
++        int count = 0;
++        while (mask) {
++          count += (mask & 1);
++          mask >>= 1;
++        }
++        *prefix = count;
++      }
++      found = true;
++      break;
++    }
++  }
++  freeifaddrs(ifaddr);
++
++  if (found && gw) {
++    std::string gw_prop = android::base::GetProperty("ro.boot.radio_gw", "");
++    if (gw_prop.empty()) {
++      gw_prop = android::base::GetProperty("vendor.redroid.radio_gw", "");
++    }
++    if (!gw_prop.empty()) {
++      *gw = gw_prop;
++    } else {
++      FILE* fp = fopen("/proc/net/route", "r");
++      if (fp) {
++        char line[256];
++        while (fgets(line, sizeof(line), fp)) {
++          char dev[64];
++          unsigned long dest = 0, gate = 0;
++          if (sscanf(line, "%63s %lx %lx", dev, &dest, &gate) >= 3) {
++            if (ifname == dev && gate != 0) {
++              struct in_addr gaddr;
++              gaddr.s_addr = gate;
++              *gw = inet_ntoa(gaddr);
++              break;
++            }
++          }
++        }
++        fclose(fp);
++      }
++    }
++  }
++  return found;
++}
++
+ int DeviceConfig::host_id() {
+   if (!cuttlefish::CuttlefishConfig::Get()) {
+     return 1000;
+@@ -33,7 +98,7 @@ int DeviceConfig::host_id() {
+ 
+ std::string DeviceConfig::PerInstancePath(const char* file_name) {
+   if (!cuttlefish::CuttlefishConfig::Get()) {
+-      return "";
++      return std::string("/data/vendor/modem/") + file_name;
+   }
+   auto config = cuttlefish::CuttlefishConfig::Get();
+   auto instance = config->ForDefaultInstance();
+@@ -41,34 +106,61 @@ std::string DeviceConfig::PerInstancePath(const char* file_name) {
+ }
+ 
+ std::string DeviceConfig::DefaultHostArtifactsPath(const std::string& file) {
++  std::string vendor_file = "/vendor/" + file;
++  std::ifstream check(vendor_file);
++  if (check.good()) {
++    return vendor_file;
++  }
+   return cuttlefish::DefaultHostArtifactsPath(file);
+ }
+ 
+ std::string DeviceConfig::ril_address_and_prefix() {
++  if (!cuttlefish::CuttlefishConfig::Get()) {
++      std::string ifname = android::base::GetProperty("ro.boot.radio_ifname", "rmnet0");
++      std::string ip;
++      int prefix = 24;
++      if (probe_interface_ipv4(ifname, &ip, &prefix, nullptr) && !ip.empty()) {
++          return ip + "/" + std::to_string(prefix);
++      }
++      return android::base::GetProperty("ro.boot.radio_ip", "10.10.10.250/24");
++  }
+   auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
+-  if (!device_config_helper) {
+-      return "10.0.2.15/24";
++  if (device_config_helper) {
++    const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
++    return ril_config.ipaddr() + "/" + std::to_string(ril_config.prefixlen());
+   }
+-  const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
+-  return ril_config.ipaddr() + "/" + std::to_string(ril_config.prefixlen());
+-};
++  return "10.0.2.15/24";
++}
+ 
+ std::string DeviceConfig::ril_gateway() {
++  if (!cuttlefish::CuttlefishConfig::Get()) {
++      std::string ifname = android::base::GetProperty("ro.boot.radio_ifname", "rmnet0");
++      std::string gw;
++      if (probe_interface_ipv4(ifname, nullptr, nullptr, &gw) && !gw.empty()) {
++          return gw;
++      }
++      return android::base::GetProperty("ro.boot.radio_gw", "10.10.10.1");
++  }
+   auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
+-  if (!device_config_helper) {
+-      return "10.0.2.2";
++  if (device_config_helper) {
++    const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
++    return ril_config.gateway();
+   }
+-  const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
+-  return ril_config.gateway();
++  return "10.0.2.2";
+ }
+ 
+ std::string DeviceConfig::ril_dns() {
++  if (!cuttlefish::CuttlefishConfig::Get()) {
++      std::string dns = android::base::GetProperty("ro.boot.radio_dns", "");
++      if (!dns.empty()) return dns;
++      return "10.10.10.1 8.8.8.8";
++  }
+   auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
+-  if (!device_config_helper) {
+-      return "8.8.8.8";
++  if (device_config_helper) {
++    const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
++    return ril_config.dns();
+   }
+-  const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
+-  return ril_config.dns();
++  return "8.8.8.8";
+ }
+ 
+ std::ifstream DeviceConfig::open_ifstream_crossplat(const char* filename) {
+diff --git a/host/commands/modem_simulator/channel_monitor.cpp b/host/commands/modem_simulator/channel_monitor.cpp
+index 941a8b4..3fc4441 100644
+--- a/host/commands/modem_simulator/channel_monitor.cpp
++++ b/host/commands/modem_simulator/channel_monitor.cpp
+@@ -120,14 +120,7 @@ void ChannelMonitor::ReadCommand(Client& client) {
+     LOG(DEBUG) << "Error reading from client fd: "
+                << client.client_fd->StrError();
+     client.client_fd->Close();  // Ignore errors here
+-    // Erase client from the vector clients
+-    auto& clients = client.type == Client::REMOTE ? remote_clients_ : clients_;
+-    auto iter = std::find_if(
+-        clients.begin(), clients.end(),
+-        [&](std::unique_ptr<Client>& other) { return *other == client; });
+-    if (iter != clients.end()) {
+-      clients.erase(iter);
+-    }
++    client.is_valid = false;
+     return;
+   }
+ 
+@@ -260,15 +253,17 @@ void ChannelMonitor::MonitorLoop() {
+         removeInvalidClients(remote_clients_);
+       }
+       for (auto& client : clients_) {
+-        if (read_set.IsSet(client->client_fd)) {
++        if (client->is_valid && read_set.IsSet(client->client_fd)) {
+           ReadCommand(*client);
+         }
+       }
+       for (auto& client : remote_clients_) {
+-        if (read_set.IsSet(client->client_fd)) {
++        if (client->is_valid && read_set.IsSet(client->client_fd)) {
+           ReadCommand(*client);
+         }
+       }
++      removeInvalidClients(clients_);
++      removeInvalidClients(remote_clients_);
+     } else {
+       // Ignore errors here
+       LOG(ERROR) << "Select call returned error : " << strerror(errno);
+diff --git a/host/commands/modem_simulator/main.cpp b/host/commands/modem_simulator/main.cpp
+index 41ab6ce..35b1bf3 100644
+--- a/host/commands/modem_simulator/main.cpp
++++ b/host/commands/modem_simulator/main.cpp
+@@ -34,6 +34,9 @@ DEFINE_string(server_fds, "", "A comma separated list of file descriptors");
+ DEFINE_int32(sim_type, 1, "Sim type: 1 for normal, 2 for CtsCarrierApiTestCases");
+ 
+ std::vector<cuttlefish::SharedFD> ServerFdsFromCmdline() {
++  if (FLAGS_server_fds.empty()) {
++    return {};
++  }
+   // Validate the parameter
+   std::string fd_list = FLAGS_server_fds;
+   for (auto c: fd_list) {
+@@ -61,14 +64,14 @@ int main(int argc, char** argv) {
+ 
+   // Modem simulator log saved in cuttlefish_runtime
+   auto config = cuttlefish::CuttlefishConfig::Get();
+-  auto instance = config->ForDefaultInstance();
+-
+-  auto modem_log_path = instance.PerInstanceLogPath("modem_simulator.log");
+-
+-  {
++  if (config) {
++    auto instance = config->ForDefaultInstance();
++    auto modem_log_path = instance.PerInstanceLogPath("modem_simulator.log");
+     auto log_path = instance.launcher_log_path();
+     std::vector<std::string> log_files{log_path, modem_log_path};
+     android::base::SetLogger(cuttlefish::LogToStderrAndFiles(log_files));
++  } else {
++    android::base::SetLogger(android::base::StderrLogger);
+   }
+ 
+   LOG(INFO) << "Start modem simulator, server_fds: " << FLAGS_server_fds
+@@ -77,8 +80,14 @@ int main(int argc, char** argv) {
+ 
+   auto server_fds = ServerFdsFromCmdline();
+   if (server_fds.empty()) {
+-    LOG(ERROR) << "Need to provide server fd";
+-    return -1;
++    // In-container self-sustained mode: bind to localhost:6520
++    auto local_server = cuttlefish::SharedFD::SocketLocalServer(6520, SOCK_STREAM);
++    if (!local_server->IsOpen()) {
++      LOG(ERROR) << "Failed to bind modem simulator server on port 6520: " << local_server->StrError();
++      return -1;
++    }
++    LOG(INFO) << "Modem simulator listening on localhost:6520";
++    server_fds.push_back(local_server);
+   }
+ 
+   cuttlefish::NvramConfig::InitNvramConfigService(server_fds.size(), FLAGS_sim_type);
+@@ -113,9 +122,14 @@ int main(int argc, char** argv) {
+   // Monitor exit request and
+   // remote call, remote sms from other cuttlefish instance
+   std::string monitor_socket_name = "modem_simulator";
+-  std::stringstream ss;
+-  ss << instance.modem_simulator_host_id();
+-  monitor_socket_name.append(ss.str());
++  if (config) {
++    auto instance = config->ForDefaultInstance();
++    std::stringstream ss;
++    ss << instance.modem_simulator_host_id();
++    monitor_socket_name.append(ss.str());
++  } else {
++    monitor_socket_name.append("1000");
++  }
+ 
+   auto monitor_socket = cuttlefish::SharedFD::SocketLocalServer(
+       monitor_socket_name.c_str(), true, SOCK_STREAM, 0666);
+-- 
+2.34.1
+

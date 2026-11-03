@@ -1,0 +1,97 @@
+[detached HEAD 4a087c7] feat(modem): enable cuttlefish modem packages, telephony apps, apns-conf and rc service in vendor/redroid
+ 3 files changed, 36 insertions(+)
+ create mode 100644 apns-conf.xml
+From 4a087c7ff72be29aeaa80e46d1b0a7c342e7514a Mon Sep 17 00:00:00 2001
+From: huangqw <hqw700@qq.com>
+Date: Tue, 3 Nov 2026 11:01:18 +0000
+Subject: [PATCH] feat(modem): enable cuttlefish modem packages, telephony
+ apps, apns-conf and rc service in vendor/redroid
+
+---
+ apns-conf.xml     | 19 +++++++++++++++++++
+ redroid.common.rc |  9 +++++++++
+ vendor.mk         |  8 ++++++++
+ 3 files changed, 36 insertions(+)
+ create mode 100644 apns-conf.xml
+
+diff --git a/apns-conf.xml b/apns-conf.xml
+new file mode 100644
+index 0000000..e71044c
+--- /dev/null
++++ b/apns-conf.xml
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<apns version="8">
++    <apn carrier="Android Virtual APN"
++         mcc="311"
++         mnc="740"
++         apn="internet"
++         type="default,supl,ia,mms"
++         protocol="IP"
++         roaming_protocol="IP"
++    />
++    <apn carrier="Android Default"
++         mcc="310"
++         mnc="260"
++         apn="internet"
++         type="default,supl,ia,mms"
++         protocol="IP"
++         roaming_protocol="IP"
++    />
++</apns>
+diff --git a/redroid.common.rc b/redroid.common.rc
+index c76da2b..f382f13 100644
+--- a/redroid.common.rc
++++ b/redroid.common.rc
+@@ -72,6 +72,7 @@ on init
+ 
+ 
+ on post-fs-data
++    mkdir /data/vendor/modem 0770 radio radio
+     # fix for static IP, must after post-fs-data and before netd
+     # rm apex config (use legacy path)
+     rm /data/misc/apexdata/com.android.tethering/misc/ethernet/ipconfig.txt
+@@ -84,6 +85,14 @@ on post-fs-data
+ 
+ 
+ on early-boot
++    setprop ro.boot.modem_simulator_ports 6520
+ 
+     # before HAL / SurfaceFlinger
+     exec -- /vendor/bin/gpu_config.sh
++
++
++service modem_simulator /system/bin/modem_simulator -sim_type=1
++    class main
++    user radio
++    group radio system inet
++    capabilities NET_ADMIN
+diff --git a/vendor.mk b/vendor.mk
+index 3b38e0c..98db8c3 100644
+--- a/vendor.mk
++++ b/vendor.mk
+@@ -5,6 +5,13 @@ PRODUCT_PACKAGES += \
+ 	binder_alloc \
+ 	gralloc.redroid \
+ 	ipconfigstore \
++	modem_simulator \
++	libcuttlefish-rild \
++	libcuttlefish-ril-2 \
++	iccprofile_for_sim0.xml \
++	numeric_operator.xml \
++	Dialer \
++	messaging \
+ 
+ 
+ PRODUCT_COPY_FILES += \
+@@ -12,6 +19,7 @@ PRODUCT_COPY_FILES += \
+     vendor/redroid/post-fs-data.redroid.sh:$(TARGET_COPY_OUT_VENDOR)/bin/post-fs-data.redroid.sh \
+     vendor/redroid/redroid.common.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/redroid.common.rc \
+     vendor/redroid/redroid.legacy.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/redroid.legacy.rc \
++    vendor/redroid/apns-conf.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/apns-conf.xml \
+ 
+ 
+ PRODUCT_COPY_FILES += \
+-- 
+2.34.1
+

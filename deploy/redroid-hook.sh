@@ -58,6 +58,29 @@ if [ "$PHASE" = "post-start" ]; then
             fi
             echo "CT $VMID: network prepared (DHCP lifecycle belongs to Android; no host DHCP client)" >> /tmp/pve-hook.log
         fi
+        for net_idx in $(seq 1 9); do
+            NET_LINE=$(sed '/^\[/,$d' "$CONF" | grep "^net${net_idx}:" | head -n 1 || true)
+            [ -n "$NET_LINE" ] || continue
+            DEV_NAME=$(echo "$NET_LINE" | grep -o 'name=[^, ]*' | cut -d= -f2 || true)
+            [ -n "$DEV_NAME" ] || DEV_NAME="eth${net_idx}"
+            DEV_IP=$(echo "$NET_LINE" | grep -o 'ip=[^, ]*' | cut -d= -f2 || true)
+            DEV_GW=$(echo "$NET_LINE" | grep -o 'gw=[^, ]*' | cut -d= -f2 || true)
+
+            nsenter -t "$PID" -n ip link set "$DEV_NAME" up >> /tmp/pve-hook.log 2>&1 || true
+            if [[ "$DEV_IP" == */* ]]; then
+                nsenter -t "$PID" -n ip addr replace "$DEV_IP" dev "$DEV_NAME" >> /tmp/pve-hook.log 2>&1 || true
+                DEV_IP_ADDR="${DEV_IP%%/*}"
+                TABLE_ID=$((100 + net_idx))
+                if [ -n "$DEV_GW" ]; then
+                    nsenter -t "$PID" -n ip route replace default via "$DEV_GW" dev "$DEV_NAME" table "$TABLE_ID" >> /tmp/pve-hook.log 2>&1 || true
+                fi
+                if ! nsenter -t "$PID" -n ip rule show | grep -q "lookup $TABLE_ID"; then
+                    nsenter -t "$PID" -n ip rule add pref 999 oif "$DEV_NAME" table "$TABLE_ID" >> /tmp/pve-hook.log 2>&1 || true
+                    nsenter -t "$PID" -n ip rule add pref 1000 from "$DEV_IP_ADDR" table "$TABLE_ID" >> /tmp/pve-hook.log 2>&1 || true
+                fi
+            fi
+            echo "CT $VMID: secondary interface $DEV_NAME ($DEV_IP) prepared" >> /tmp/pve-hook.log
+        done
     fi
 fi
 

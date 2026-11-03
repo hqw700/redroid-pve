@@ -20,6 +20,25 @@ if [ "$HOOK_TYPE" = "start-host" ] || [ "$HOOK_TYPE" = "pre-start" ] || [ -n "$L
             nsenter -t "$LXC_PID" -n ip link set eth0 up 2>/dev/null || true
             [ -n "$GW_VAL" ] && nsenter -t "$LXC_PID" -n ip route add default via "$GW_VAL" dev eth0 2>/dev/null || true
         fi
+        for net_idx in $(seq 1 9); do
+            NET_LINE=$(sed '/^\[/,$d' "$CONF" | grep "^net${net_idx}:" | head -n 1 || true)
+            [ -n "$NET_LINE" ] || continue
+            DEV_NAME=$(echo "$NET_LINE" | grep -o 'name=[^, ]*' | cut -d= -f2 || true)
+            [ -n "$DEV_NAME" ] || DEV_NAME="eth${net_idx}"
+            DEV_IP=$(echo "$NET_LINE" | grep -o 'ip=[^, ]*' | cut -d= -f2 || true)
+            DEV_GW=$(echo "$NET_LINE" | grep -o 'gw=[^, ]*' | cut -d= -f2 || true)
+            nsenter -t "$LXC_PID" -n ip link set "$DEV_NAME" up 2>/dev/null || true
+            if [[ "$DEV_IP" == */* ]]; then
+                nsenter -t "$LXC_PID" -n ip addr replace "$DEV_IP" dev "$DEV_NAME" 2>/dev/null || true
+                DEV_IP_ADDR="${DEV_IP%%/*}"
+                TABLE_ID=$((100 + net_idx))
+                [ -n "$DEV_GW" ] && nsenter -t "$LXC_PID" -n ip route replace default via "$DEV_GW" dev "$DEV_NAME" table "$TABLE_ID" 2>/dev/null || true
+                if ! nsenter -t "$LXC_PID" -n ip rule show 2>/dev/null | grep -q "lookup $TABLE_ID"; then
+                    nsenter -t "$LXC_PID" -n ip rule add pref 999 oif "$DEV_NAME" table "$TABLE_ID" 2>/dev/null || true
+                    nsenter -t "$LXC_PID" -n ip rule add pref 1000 from "$DEV_IP_ADDR" table "$TABLE_ID" 2>/dev/null || true
+                fi
+            fi
+        done
     fi
     exit 0
 fi

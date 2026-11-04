@@ -103,7 +103,19 @@ class RuntimeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'network API 1'):
                     runtime.require_dhcp_support(image)
             with patch.object(runtime.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=b'vendor.redroid.network_api\0ro.boot.redroid_net_mode')):
-                self.assertEqual(runtime.require_dhcp_support(image)['provider'], 'android')
+                res1 = runtime.require_dhcp_support(image, cache_file=Path(directory) / 'cache.json')
+                self.assertEqual(res1['provider'], 'android')
+                self.assertFalse(res1.get('cached', False))
+            # Second check uses cache without executing subprocess
+            with patch.object(runtime.subprocess, 'run', side_effect=AssertionError('subprocess.run should not be called on cache hit')):
+                res2 = runtime.require_dhcp_support(image, cache_file=Path(directory) / 'cache.json')
+                self.assertTrue(res2.get('cached'))
+                self.assertEqual(res2['provider'], 'android')
+            # Bypass cache with use_cache=False invokes subprocess
+            with patch.object(runtime.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=b'vendor.redroid.network_api\0ro.boot.redroid_net_mode')) as mocked_run:
+                res3 = runtime.require_dhcp_support(image, use_cache=False, cache_file=Path(directory) / 'cache.json')
+                self.assertEqual(res3['provider'], 'android')
+                self.assertTrue(mocked_run.called)
         with self.assertRaisesRegex(ValueError, '--template'):
             runtime.require_dhcp_support(None)
 

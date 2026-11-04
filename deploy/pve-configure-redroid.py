@@ -37,6 +37,7 @@ def arguments(argv=None):
     host.add_argument("--prepare-host", action="store_true", help="load the host BinderFS driver and enable loading at boot; no CT changes")
     parser.add_argument("--check-dhcp", action="store_true", help="check a template's native Android DHCP support without changing a CT")
     parser.add_argument("--template", type=Path, help="PVE .tar.zst template to check with --check-dhcp")
+    parser.add_argument("--no-cache", action="store_true", help="bypass cached image capability results")
     parser.add_argument("--network-status", action="store_true", help="read actual IPv4 addresses/routes from the running CT; no configuration changes")
     parser.add_argument("--wait-network", type=int, default=0, metavar="SECONDS", help="wait up to 120 seconds for an actual IPv4 address (with --network-status)")
     parser.add_argument("--cellular-iface", default="rmnet0", help="name of the cellular network interface (default: rmnet0)")
@@ -176,9 +177,55 @@ def net0_options(text):
     return dict(part.split('=', 1) for part in line.split(',') if '=' in part)
 
 
-def require_dhcp_support(template):
+DHCP_CACHE_FILE = Path('/var/cache/redroid-pve/template_dhcp_cache.json')
+FALLBACK_CACHE_FILE = Path('/tmp/.redroid_dhcp_cache.json')
+
+
+def _get_dhcp_cache_file():
+    try:
+        DHCP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        return DHCP_CACHE_FILE
+    except Exception:
+        return FALLBACK_CACHE_FILE
+
+
+def _load_dhcp_cache(cache_file=None):
+    target = cache_file or _get_dhcp_cache_file()
+    try:
+        if target.is_file():
+            return json.loads(target.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_dhcp_cache(cache, cache_file=None):
+    target = cache_file or _get_dhcp_cache_file()
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(cache, indent=2))
+    except Exception:
+        pass
+
+
+def require_dhcp_support(template, use_cache=True, cache_file=None):
     if not template or not template.is_file():
         raise ValueError('--check-dhcp requires --template PATH to an existing .tar.zst image')
+
+    resolved = template.resolve()
+    st = None
+    key = str(resolved)
+    if use_cache:
+        try:
+            st = resolved.stat()
+            cache = _load_dhcp_cache(cache_file)
+            entry = cache.get(key)
+            if entry and entry.get('size') == st.st_size and entry.get('mtime_ns') == st.st_mtime_ns:
+                if entry.get('dhcp4') and entry.get('image_network_api', 0) >= 1:
+                    return {'dhcp4': True, 'provider': 'android', 'image_network_api': 1, 'cached': True}
+        except Exception:
+            pass
+
     # Check the actual image rather than assuming newer host scripts can repair
     # an old ipconfigstore binary. Read only this member; never extract the image.
     probe = subprocess.run(['tar', '--zstd', '--wildcards', '--occurrence=1', '-xOf', str(template),
@@ -186,6 +233,24 @@ def require_dhcp_support(template):
     if probe.returncode or not all(marker in probe.stdout for marker in
                                   (b'vendor.redroid.network_api', b'ro.boot.redroid_net_mode')):
         raise ValueError('DHCP requires a redroid-pve image with network API 1 (patches 0007 and 0008); update the image or use a static IPv4 address')
+
+    if use_cache:
+        try:
+            if st is None:
+                st = resolved.stat()
+            cache = _load_dhcp_cache(cache_file)
+            cache[key] = {
+                'size': st.st_size,
+                'mtime_ns': st.st_mtime_ns,
+                'dhcp4': True,
+                'provider': 'android',
+                'image_network_api': 1,
+                'checked_at': int(time.time()),
+            }
+            _save_dhcp_cache(cache, cache_file)
+        except Exception:
+            pass
+
     return {'dhcp4': True, 'provider': 'android', 'image_network_api': 1}
 
 
@@ -411,7 +476,7 @@ def main():
         print(json.dumps(prepare_host() if args.prepare_host else host_status()))
         return
     if args.check_dhcp:
-        print(json.dumps({'api': API_VERSION, 'version': RUNTIME_VERSION, **require_dhcp_support(args.template)}))
+        print(json.dumps({'api': API_VERSION, 'version': RUNTIME_VERSION, **require_dhcp_support(args.template, use_cache=not args.no_cache)}))
         return
     validate(args)
     path = Path(f"/etc/pve/lxc/{args.vmid}.conf")

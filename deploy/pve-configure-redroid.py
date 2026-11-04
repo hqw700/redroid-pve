@@ -15,16 +15,18 @@ import time
 from pathlib import Path
 
 API_VERSION = 1
-RUNTIME_VERSION = "1.1.1"
+RUNTIME_VERSION = "1.2.0"
 BINDER_FILESYSTEMS = Path("/proc/filesystems")
 BINDER_AUTOLOAD = Path("/etc/modules-load.d/redroid-pve.conf")
+SUBUID_PATH = Path("/etc/subuid")
+SUBGID_PATH = Path("/etc/subgid")
 BEGIN = "# BEGIN redroid-pve runtime"
 END = "# END redroid-pve runtime"
 HOOK = "/usr/share/lxc/hooks/redroid-pve-hook.sh"
 BOOT_TOKEN = re.compile(r"(?:androidboot|ro\.boot)\.[A-Za-z0-9_.-]+=[A-Za-z0-9_./,:+@%=-]+\Z")
 
 
-def arguments():
+def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("vmid", nargs="?", type=int)
     parser.add_argument("--version", action="store_true")
@@ -37,6 +39,8 @@ def arguments():
     parser.add_argument("--template", type=Path, help="PVE .tar.zst template to check with --check-dhcp")
     parser.add_argument("--network-status", action="store_true", help="read actual IPv4 addresses/routes from the running CT; no configuration changes")
     parser.add_argument("--wait-network", type=int, default=0, metavar="SECONDS", help="wait up to 120 seconds for an actual IPv4 address (with --network-status)")
+    parser.add_argument("--cellular-iface", default="rmnet0", help="name of the cellular network interface (default: rmnet0)")
+    parser.add_argument("--cellular-dns", default="", help="DNS servers for cellular network, space-separated")
     parser.add_argument("--gpu-mode", choices=("host", "guest"), default="host")
     parser.add_argument("--gpu-node", default="/dev/dri/renderD128")
     for name, default, maximum in (("width", 1080, 16384), ("height", 1920, 16384), ("dpi", 320, 2000), ("fps", 60, 240)):
@@ -44,13 +48,38 @@ def arguments():
     parser.add_argument("--output-mode", choices=("headless", "hdmi"), default="headless")
     parser.add_argument("--device-id", default="")
     parser.add_argument("--extra-boot-args", default="")
-    return parser, parser.parse_args()
+    return parser, parser.parse_args(argv)
+
+
+def check_subid_mapping(path):
+    if not path.is_file():
+        return False
+    for line in path.read_text().splitlines():
+        parts = line.strip().split(':')
+        if len(parts) >= 3 and parts[0] == 'root':
+            try:
+                if int(parts[2]) >= 1000000:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
+def prepare_subid_mapping(path):
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    content = path.read_text() if path.is_file() else ''
+    lines = [l for l in content.splitlines() if not l.startswith('root:')]
+    lines.append('root:100000:1000000')
+    path.write_text('\n'.join(lines) + '\n')
 
 
 def host_status():
     binderfs = any(line.split()[-1:] == ['binder'] for line in BINDER_FILESYSTEMS.read_text().splitlines())
     return {'api': API_VERSION, 'version': RUNTIME_VERSION, 'kernel': os.uname().release,
             'ready': binderfs, 'binderfs': binderfs,
+            'subuid': check_subid_mapping(SUBUID_PATH),
+            'subgid': check_subid_mapping(SUBGID_PATH),
             'details': '' if binderfs else 'BinderFS is unavailable; run pve-configure-redroid --prepare-host on the PVE host'}
 
 
@@ -72,6 +101,16 @@ def prepare_host():
         BINDER_AUTOLOAD.parent.mkdir(parents=True, exist_ok=True)
         BINDER_AUTOLOAD.write_text(text + ('' if text.endswith('\n') else '\n') + 'binder_linux\n')
     state['autoload_configured'] = True
+    try:
+        if not check_subid_mapping(SUBUID_PATH):
+            prepare_subid_mapping(SUBUID_PATH)
+        if not check_subid_mapping(SUBGID_PATH):
+            prepare_subid_mapping(SUBGID_PATH)
+        state['subuid'] = True
+        state['subgid'] = True
+    except OSError:
+        state['subuid'] = check_subid_mapping(SUBUID_PATH)
+        state['subgid'] = check_subid_mapping(SUBGID_PATH)
     return state
 
 
@@ -90,6 +129,12 @@ def validate(args):
     tokens = shlex.split(args.extra_boot_args)
     if any(not BOOT_TOKEN.fullmatch(token) for token in tokens):
         raise ValueError("extra boot arguments must be androidboot.*=value or ro.boot.*=value tokens")
+    if getattr(args, 'cellular_dns', ''):
+        for server in args.cellular_dns.split():
+            try:
+                ipaddress.IPv4Address(server)
+            except ValueError:
+                raise ValueError(f"invalid cellular DNS: {server}")
     return tokens
 
 
@@ -99,6 +144,30 @@ def split_current(text):
         if line.strip().startswith("["):
             return lines[:index], lines[index:]
     return lines, []
+
+
+def parse_network_options(text):
+    current, _ = split_current(text)
+    networks = {}
+    for line in current:
+        line = line.strip()
+        m = re.match(r"^net(\d+):\s*(.*)$", line)
+        if m:
+            idx = int(m.group(1))
+            parts = dict(part.split('=', 1) for part in m.group(2).split(',') if '=' in part)
+            networks[idx] = parts
+    return networks
+
+
+def cellular_options(text, cellular_iface="rmnet0"):
+    networks = parse_network_options(text)
+    for idx, opts in networks.items():
+        if opts.get('name') == cellular_iface:
+            return idx, opts
+    for idx, opts in networks.items():
+        if idx > 0 and (cellular_iface in opts.get('name', '') or opts.get('name', '').startswith('rmnet')):
+            return idx, opts
+    return None, None
 
 
 def net0_options(text):
@@ -120,28 +189,52 @@ def require_dhcp_support(template):
     return {'dhcp4': True, 'provider': 'android', 'image_network_api': 1}
 
 
-def configure_network(text):
+def configure_network(text, args=None):
     settings = net0_options(text)
-    if settings.get('ip') != 'dhcp':
-        return text
-    if settings.get('name') != 'eth0':
-        raise ValueError('ReDroid DHCP currently requires net0 name=eth0')
-    if settings.get('gw'):
-        raise ValueError('DHCP obtains its gateway from the DHCP server; remove the static net0 gw setting')
-    # Exactly one DHCP owner: Android's IpClient owns leases, DNS and routes.
-    settings.pop('host-managed', None)
-    current, snapshots = split_current(text)
-    current = ['net0: ' + ','.join(f'{key}={value}' for key, value in settings.items())
-               if line.startswith('net0:') else line for line in current]
-    return '\n'.join(current + ([''] + snapshots if snapshots else [])) + '\n'
+    if settings.get('ip') == 'dhcp':
+        if settings.get('name') != 'eth0':
+            raise ValueError('ReDroid DHCP currently requires net0 name=eth0')
+        if settings.get('gw'):
+            raise ValueError('DHCP obtains its gateway from the DHCP server; remove the static net0 gw setting')
+        # Exactly one DHCP owner: Android's IpClient owns leases, DNS and routes.
+        settings.pop('host-managed', None)
+        current, snapshots = split_current(text)
+        current = ['net0: ' + ','.join(f'{key}={value}' for key, value in settings.items())
+                   if line.startswith('net0:') else line for line in current]
+        text = '\n'.join(current + ([''] + snapshots if snapshots else [])) + '\n'
+
+    # Validate cellular configuration if present
+    cell_iface = getattr(args, 'cellular_iface', 'rmnet0') if args else 'rmnet0'
+    cell_idx, cell_opts = cellular_options(text, cell_iface)
+    if cell_opts:
+        cell_ip = cell_opts.get('ip', '')
+        if cell_ip == 'dhcp':
+            raise ValueError(f"Cellular interface ({cell_iface}) does not support DHCP yet; static IPv4 is required")
+        if cell_ip and cell_ip != 'manual':
+            try:
+                ipaddress.IPv4Interface(cell_ip)
+            except ValueError:
+                raise ValueError(f"invalid cellular IP: {cell_ip}")
+        cell_gw = cell_opts.get('gw', '')
+        if cell_gw:
+            try:
+                ipaddress.IPv4Address(cell_gw)
+            except ValueError:
+                raise ValueError(f"invalid cellular gateway: {cell_gw}")
+    return text
 
 
-def network_status(vmid, text):
+def network_status(vmid, text, cellular_iface="rmnet0"):
     settings = net0_options(text)
     configured = settings.get('ip', 'manual')
     result = {'vmid': vmid, 'mode': 'dhcp' if configured == 'dhcp' else 'static' if '/' in configured else 'manual',
               'provider': 'android' if configured == 'dhcp' else 'redroid-hook',
               'running': False, 'ready': False, 'ipv4': [], 'gateway': '', 'dns': []}
+    cell_idx, cell_opts = cellular_options(text, cellular_iface)
+    result['ethernet'] = {'interface': settings.get('name', 'eth0'),
+                          'mode': result['mode'], 'ready': False, 'ipv4': [], 'gateway': '', 'dns': []}
+    result['cellular'] = {'interface': cellular_iface, 'configured': bool(cell_opts),
+                          'ready': False, 'ipv4': [], 'gateway': '', 'dns': []}
     pid_result = subprocess.run(['lxc-info', '-n', str(vmid), '-p', '-H'], capture_output=True, text=True, timeout=5)
     pid = pid_result.stdout.strip()
     if pid_result.returncode or not pid.isdigit() or int(pid) <= 1:
@@ -155,13 +248,18 @@ def network_status(vmid, text):
         response = subprocess.run(['nsenter', '-t', pid, '-n', '--', 'ip', '-j', '-4', *args],
                                   check=True, capture_output=True, text=True, timeout=5)
         return json.loads(response.stdout)
-    for interface in query('addr', 'show', 'dev', settings.get('name', 'eth0'), 'scope', 'global'):
-        for addr in interface.get('addr_info', []):
-            address = ipaddress.ip_address(addr['local'])
-            if address.version == 4 and not address.is_link_local and not address.is_loopback and not address.is_unspecified:
-                result['ipv4'].append(f"{address}/{addr['prefixlen']}")
-    routes = query('route', 'show', 'table', 'all', 'default', 'dev', settings.get('name', 'eth0'))
-    result['gateway'] = next((route['gateway'] for route in routes if route.get('gateway')), '')
+    try:
+        for interface in query('addr', 'show', 'dev', settings.get('name', 'eth0'), 'scope', 'global'):
+            for addr in interface.get('addr_info', []):
+                address = ipaddress.ip_address(addr['local'])
+                if address.version == 4 and not address.is_link_local and not address.is_loopback and not address.is_unspecified:
+                    result['ipv4'].append(f"{address}/{addr['prefixlen']}")
+        routes = query('route', 'show', 'table', 'all', 'default', 'dev', settings.get('name', 'eth0'))
+        result['gateway'] = next((route['gateway'] for route in routes if route.get('gateway')), '')
+    except Exception:
+        pass
+    result['ethernet']['ipv4'] = list(result['ipv4'])
+    result['ethernet']['gateway'] = result['gateway']
     if configured == 'dhcp':
         try:
             response = subprocess.run(['pct', 'exec', str(vmid), '--', '/system/bin/dumpsys', 'ethernet'],
@@ -176,7 +274,22 @@ def network_status(vmid, text):
                         result['dns'].append(parsed)
                 except ValueError:
                     pass
+    result['ethernet']['dns'] = list(result['dns'])
     result['ready'] = bool(result['ipv4'])
+    result['ethernet']['ready'] = result['ready']
+
+    if cell_opts:
+        try:
+            for interface in query('addr', 'show', 'dev', cellular_iface, 'scope', 'global'):
+                for addr in interface.get('addr_info', []):
+                    address = ipaddress.ip_address(addr['local'])
+                    if address.version == 4 and not address.is_link_local and not address.is_loopback and not address.is_unspecified:
+                        result['cellular']['ipv4'].append(f"{address}/{addr['prefixlen']}")
+            cell_routes = query('route', 'show', 'table', '101', 'default', 'dev', cellular_iface)
+            result['cellular']['gateway'] = next((route['gateway'] for route in cell_routes if route.get('gateway')), '')
+            result['cellular']['ready'] = bool(result['cellular']['ipv4'])
+        except Exception:
+            pass
     return result
 
 
@@ -204,7 +317,9 @@ def profile(args, unprivileged, extra):
              "lxc.init.cmd: " + " ".join(boot), "lxc.autodev: 0",
              "lxc.mount.entry: tmpfs dev tmpfs create=dir,rw,nosuid,size=134217728,mode=755 0 0"]
     if unprivileged:
-        lines += ["lxc.prlimit.nice: 40"]
+        lines += ["lxc.prlimit.nice: 40",
+                  "lxc.idmap: u 0 100000 1000000",
+                  "lxc.idmap: g 0 100000 1000000"]
         for major in (1, 5, 10, 226, 248):
             lines.append(f"lxc.cgroup2.devices.allow: c {major}:* rwm")
         for device in ("null", "zero", "random", "urandom", "tty", "kmsg", "uinput"):
@@ -224,14 +339,14 @@ def profile(args, unprivileged, extra):
 
 def render(text, args):
     extra = validate(args)
-    text = configure_network(text)
+    text = configure_network(text, args)
     current, snapshots = split_current(text)
     unprivileged = any(re.fullmatch(r"unprivileged:\s*1", line.strip()) for line in current)
     if any(line.strip().startswith("lock:") for line in current):
         raise ValueError("container configuration is locked")
     filtered, inside = [], False
     managed_keys = ("cmode:", "lxc.init.cmd:", "lxc.apparmor.profile:", "lxc.cgroup2.devices.allow:",
-                    "lxc.cap.drop:", "lxc.mount.auto:", "lxc.autodev:", "lxc.prlimit.nice:")
+                    "lxc.cap.drop:", "lxc.mount.auto:", "lxc.autodev:", "lxc.prlimit.nice:", "lxc.idmap:")
     # Migrate known legacy profile mounts only; never discard third-party/Agent mounts.
     sources = {"tmpfs", "/dev/dri", "/dev/dma_heap", "/dev/fuse", "/dev/loop-control", "/dev/uinput",
                "/dev/null", "/dev/zero", "/dev/random", "/dev/urandom", "/dev/tty", "/dev/kmsg"}
@@ -277,6 +392,11 @@ def render(text, args):
         raise ValueError('redroid_net_mode is derived from net0; do not override it with extra boot arguments')
     mode = 'dhcp' if net0_options(text).get('ip') == 'dhcp' else 'static'
     extra.append('androidboot.redroid_net_mode=' + mode)
+    cell_idx, cell_opts = cellular_options(text, getattr(args, 'cellular_iface', 'rmnet0'))
+    if cell_opts:
+        extra.append(f"ro.boot.radio_ifname={getattr(args, 'cellular_iface', 'rmnet0')}")
+        if getattr(args, 'cellular_dns', ''):
+            extra.append(f"ro.boot.radio_dns={args.cellular_dns}")
     return "\n".join(filtered + profile(args, unprivileged, extra) + ([""] + snapshots if snapshots else [])) + "\n"
 
 
@@ -300,7 +420,7 @@ def main():
             raise ValueError('--wait-network must be between 0 and 120 seconds')
         deadline = time.monotonic() + args.wait_network
         while True:
-            state = network_status(args.vmid, path.read_text())
+            state = network_status(args.vmid, path.read_text(), args.cellular_iface)
             if state['ready'] or time.monotonic() >= deadline:
                 print(json.dumps(state))
                 if args.wait_network and not state['ready']:

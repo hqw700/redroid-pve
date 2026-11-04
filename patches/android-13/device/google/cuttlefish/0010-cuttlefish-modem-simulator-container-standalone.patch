@@ -1,22 +1,5 @@
-[detached HEAD fcd68a9] feat(modem): adapt cuttlefish modem_simulator and rild for in-container self-sustained operation and dynamic radio interface
- 5 files changed, 154 insertions(+), 37 deletions(-)
-From fcd68a9fa2737f21eec081c17ac2196486d96d8c Mon Sep 17 00:00:00 2001
-From: huangqw <hqw700@qq.com>
-Date: Tue, 3 Nov 2026 11:20:23 +0000
-Subject: [PATCH] feat(modem): adapt cuttlefish modem_simulator and rild for
- in-container self-sustained operation and dynamic radio interface
-
-Change-Id: Ie6a282be128d7a9cae738d4be640850f5561ef2d
----
- guest/hals/ril/reference-ril/reference-ril.c  |  12 +-
- guest/hals/rild/rild_cuttlefish.c             |   8 +-
- .../modem_simulator/cf_device_config.cpp      | 122 +++++++++++++++---
- .../modem_simulator/channel_monitor.cpp       |  15 +--
- host/commands/modem_simulator/main.cpp        |  34 +++--
- 5 files changed, 154 insertions(+), 37 deletions(-)
-
 diff --git a/guest/hals/ril/reference-ril/reference-ril.c b/guest/hals/ril/reference-ril/reference-ril.c
-index f3d01e4..cbe596a 100644
+index f3d01e4..40c90c2 100644
 --- a/guest/hals/ril/reference-ril/reference-ril.c
 +++ b/guest/hals/ril/reference-ril/reference-ril.c
 @@ -795,10 +795,20 @@ static void requestCallSelection(
@@ -41,6 +24,141 @@ index f3d01e4..cbe596a 100644
  }
  
  static void requestOrSendDataCallList(int cid, RIL_Token *t)
+@@ -965,76 +975,74 @@ static void requestOrSendDataCallList(int cid, RIL_Token *t)
+             }
+             responses[i].mtu = DEFAULT_MTU;
+         } else {
+-            /* I don't know where we are, so use the public Google DNS
+-                * servers by default and no gateway.
+-                */
+-            responses[i].dnses = "8.8.8.8 8.8.4.4";
++            responses[i].dnses = "";
+             responses[i].gateways = "";
+         }
+     }
+ 
+-    // If cid = -1, return the data call list without processing CGCONTRDP (setupDataCall)
+-    if (cid == -1) {
+-        if (t != NULL)
+-            RIL_onRequestComplete(*t, RIL_E_SUCCESS, &responses[0],
+-                                  sizeof(RIL_Data_Call_Response_v11));
+-        else
+-            RIL_onUnsolicitedResponse(RIL_UNSOL_DATA_CALL_LIST_CHANGED, responses,
+-                                      n * sizeof(RIL_Data_Call_Response_v11));
+-        at_response_free(p_response);
+-        p_response = NULL;
+-        return;
+-    }
+-
+     at_response_free(p_response);
+     p_response = NULL;
+ 
+-    char cmd[64] = {0};
+-    snprintf(cmd, sizeof(cmd), "AT+CGCONTRDP=%d", cid);
+-    err = at_send_command_singleline(cmd, "+CGCONTRDP:", &p_response);
+-    if (err < 0 || p_response->success == 0) {
+-        goto error;
++    /* Populate gateway and dns dynamically via CGCONTRDP for active contexts */
++    for (i = 0; i < n; i++) {
++        if (responses[i].active == 1) {
++            char cmd[64] = {0};
++            snprintf(cmd, sizeof(cmd), "AT+CGCONTRDP=%d", responses[i].cid);
++            ATResponse *p_dp_resp = NULL;
++            int dp_err = at_send_command_singleline(cmd, "+CGCONTRDP:", &p_dp_resp);
++            if (dp_err == 0 && p_dp_resp != NULL && p_dp_resp->success != 0 && p_dp_resp->p_intermediates != NULL) {
++                char *input = p_dp_resp->p_intermediates->line;
++                int ncid = -1, skip = 0;
++                char *sskip = NULL;
++                char *gw = NULL, *dns = NULL;
++                if (at_tok_start(&input) >= 0 &&
++                    at_tok_nextint(&input, &ncid) >= 0 &&
++                    at_tok_nextint(&input, &skip) >= 0 &&
++                    at_tok_nextstr(&input, &sskip) >= 0 &&
++                    at_tok_nextstr(&input, &sskip) >= 0 &&
++                    at_tok_nextstr(&input, &gw) >= 0 &&
++                    at_tok_nextstr(&input, &dns) >= 0) {
++                    if (gw && strlen(gw) > 0) {
++                        int gw_sz = strlen(gw) + 1;
++                        responses[i].gateways = alloca(gw_sz);
++                        strlcpy(responses[i].gateways, gw, gw_sz);
++                    }
++                    if (dns && strlen(dns) > 0) {
++                        int dns_sz = strlen(dns) + 1;
++                        responses[i].dnses = alloca(dns_sz);
++                        strlcpy(responses[i].dnses, dns, dns_sz);
++                    }
++                }
++                at_response_free(p_dp_resp);
++            }
++        }
+     }
+ 
+-    int skip = 0;
+-    char *sskip = NULL;
+-    char *input = p_response->p_intermediates->line;
+-
+-    int ncid = -1;
+-    err = at_tok_start(&input);
+-    if (err < 0) goto error;
+-
+-    err = at_tok_nextint(&input, &ncid);  // cid
+-    if (err < 0) goto error;
+-
+-    if (cid != ncid) goto error;
+-
+-    i = ncid - 1;
+-
+-    err = at_tok_nextint(&input, &skip);  // bearer_id
+-    if (err < 0) goto error;
+-
+-    err = at_tok_nextstr(&input, &sskip);  // apn
+-    if (err < 0) goto error;
+-
+-    err = at_tok_nextstr(&input, &sskip);  // local_addr_and_subnet_mask
+-    if (err < 0) goto error;
+-
+-    err = at_tok_nextstr(&input, &responses[i].gateways);  // gw_addr
+-    if (err < 0) goto error;
+-
+-    err = at_tok_nextstr(&input, &responses[i].dnses);  // dns_prim_addr
+-    if (err < 0) goto error;
+-
+-    if (t != NULL)
+-        RIL_onRequestComplete(*t, RIL_E_SUCCESS, &responses[i],
+-                               sizeof(RIL_Data_Call_Response_v11));
+-    else
+-        RIL_onUnsolicitedResponse(RIL_UNSOL_DATA_CALL_LIST_CHANGED,
+-                                  responses,
++    if (cid != -1) {
++        int target_idx = -1;
++        for (i = 0; i < n; i++) {
++            if (responses[i].cid == cid) {
++                target_idx = i;
++                break;
++            }
++        }
++        if (target_idx == -1) goto error;
++        if (t != NULL)
++            RIL_onRequestComplete(*t, RIL_E_SUCCESS, &responses[target_idx],
++                                  sizeof(RIL_Data_Call_Response_v11));
++        else
++            RIL_onUnsolicitedResponse(RIL_UNSOL_DATA_CALL_LIST_CHANGED,
++                                      responses,
++                                      n * sizeof(RIL_Data_Call_Response_v11));
++    } else {
++        if (t != NULL)
++            RIL_onRequestComplete(*t, RIL_E_SUCCESS, responses,
+                                   n * sizeof(RIL_Data_Call_Response_v11));
+-
+-    at_response_free(p_response);
++        else
++            RIL_onUnsolicitedResponse(RIL_UNSOL_DATA_CALL_LIST_CHANGED,
++                                      responses,
++                                      n * sizeof(RIL_Data_Call_Response_v11));
++    }
+     return;
+ 
+ error:
 diff --git a/guest/hals/rild/rild_cuttlefish.c b/guest/hals/rild/rild_cuttlefish.c
 index 49f34ec..5f8f6a3 100644
 --- a/guest/hals/rild/rild_cuttlefish.c
@@ -61,91 +179,53 @@ index 49f34ec..5f8f6a3 100644
      }
  
 diff --git a/host/commands/modem_simulator/cf_device_config.cpp b/host/commands/modem_simulator/cf_device_config.cpp
-index 1201db5..6217759 100644
+index 1201db5..cb68f13 100644
 --- a/host/commands/modem_simulator/cf_device_config.cpp
 +++ b/host/commands/modem_simulator/cf_device_config.cpp
-@@ -14,14 +14,79 @@
+@@ -1,24 +1,38 @@
+ /*
+  * Copyright (C) 2020 The Android Open Source Project
+  *
+- * Licensed under the Apache License, Version 2.0 (the "License");
++ * Licensed under the Apache License, Version 2.0 (the License);
+  * you may not use this file except in compliance with the License.
+  * You may obtain a copy of the License at
+  *
+  *      http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
++ * distributed under the License is distributed on an AS IS BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
   * limitations under the License.
   */
  
+-#include "common/libs/device_config/device_config.h"
+ #include "host/commands/modem_simulator/device_config.h"
++
 +#include <arpa/inet.h>
 +#include <ifaddrs.h>
++#include <linux/rtnetlink.h>
 +#include <net/if.h>
++#include <sys/socket.h>
++#include <unistd.h>
 +
++#include <android-base/logging.h>
 +#include <android-base/properties.h>
++#include <json/json.h>
 +
- #include "common/libs/device_config/device_config.h"
- #include "host/commands/modem_simulator/device_config.h"
++#include <fstream>
++#include <sstream>
++
++#include "common/libs/device_config/device_config.h"
  #include "host/libs/config/cuttlefish_config.h"
  
 -// this file provide cuttlefish hooks
  namespace cuttlefish {
  namespace modem {
  
-+static bool probe_interface_ipv4(const std::string& ifname, std::string* ip, int* prefix, std::string* gw) {
-+  struct ifaddrs* ifaddr = nullptr;
-+  if (getifaddrs(&ifaddr) == -1 || !ifaddr) {
-+    return false;
-+  }
-+  bool found = false;
-+  for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
-+    if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
-+    if (ifa->ifa_name && ifname == ifa->ifa_name) {
-+      char ip_str[INET_ADDRSTRLEN] = {0};
-+      auto* sa = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
-+      inet_ntop(AF_INET, &(sa->sin_addr), ip_str, INET_ADDRSTRLEN);
-+      if (ip) *ip = ip_str;
-+
-+      if (prefix && ifa->ifa_netmask) {
-+        auto* mask_sa = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_netmask);
-+        uint32_t mask = ntohl(mask_sa->sin_addr.s_addr);
-+        int count = 0;
-+        while (mask) {
-+          count += (mask & 1);
-+          mask >>= 1;
-+        }
-+        *prefix = count;
-+      }
-+      found = true;
-+      break;
-+    }
-+  }
-+  freeifaddrs(ifaddr);
-+
-+  if (found && gw) {
-+    std::string gw_prop = android::base::GetProperty("ro.boot.radio_gw", "");
-+    if (gw_prop.empty()) {
-+      gw_prop = android::base::GetProperty("vendor.redroid.radio_gw", "");
-+    }
-+    if (!gw_prop.empty()) {
-+      *gw = gw_prop;
-+    } else {
-+      FILE* fp = fopen("/proc/net/route", "r");
-+      if (fp) {
-+        char line[256];
-+        while (fgets(line, sizeof(line), fp)) {
-+          char dev[64];
-+          unsigned long dest = 0, gate = 0;
-+          if (sscanf(line, "%63s %lx %lx", dev, &dest, &gate) >= 3) {
-+            if (ifname == dev && gate != 0) {
-+              struct in_addr gaddr;
-+              gaddr.s_addr = gate;
-+              *gw = inet_ntoa(gaddr);
-+              break;
-+            }
-+          }
-+        }
-+        fclose(fp);
-+      }
-+    }
-+  }
-+  return found;
-+}
-+
- int DeviceConfig::host_id() {
-   if (!cuttlefish::CuttlefishConfig::Get()) {
-     return 1000;
-@@ -33,7 +98,7 @@ int DeviceConfig::host_id() {
+@@ -33,7 +47,7 @@ int DeviceConfig::host_id() {
  
  std::string DeviceConfig::PerInstancePath(const char* file_name) {
    if (!cuttlefish::CuttlefishConfig::Get()) {
@@ -154,7 +234,7 @@ index 1201db5..6217759 100644
    }
    auto config = cuttlefish::CuttlefishConfig::Get();
    auto instance = config->ForDefaultInstance();
-@@ -41,34 +106,61 @@ std::string DeviceConfig::PerInstancePath(const char* file_name) {
+@@ -41,34 +55,149 @@ std::string DeviceConfig::PerInstancePath(const char* file_name) {
  }
  
  std::string DeviceConfig::DefaultHostArtifactsPath(const std::string& file) {
@@ -166,66 +246,160 @@ index 1201db5..6217759 100644
    return cuttlefish::DefaultHostArtifactsPath(file);
  }
  
- std::string DeviceConfig::ril_address_and_prefix() {
-+  if (!cuttlefish::CuttlefishConfig::Get()) {
-+      std::string ifname = android::base::GetProperty("ro.boot.radio_ifname", "rmnet0");
-+      std::string ip;
-+      int prefix = 24;
-+      if (probe_interface_ipv4(ifname, &ip, &prefix, nullptr) && !ip.empty()) {
-+          return ip + "/" + std::to_string(prefix);
-+      }
-+      return android::base::GetProperty("ro.boot.radio_ip", "10.10.10.250/24");
-+  }
-   auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
+-std::string DeviceConfig::ril_address_and_prefix() {
+-  auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
 -  if (!device_config_helper) {
 -      return "10.0.2.15/24";
-+  if (device_config_helper) {
-+    const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
-+    return ril_config.ipaddr() + "/" + std::to_string(ril_config.prefixlen());
++CellularNetworkConfig DeviceConfig::ReadCellularConfig() {
++  CellularNetworkConfig cfg;
++  if (cuttlefish::CuttlefishConfig::Get()) {
++    auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
++    if (device_config_helper) {
++      const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
++      cfg.ifname = "eth0";
++      cfg.enabled = true;
++      cfg.ip_and_prefix = ril_config.ipaddr() + "/" + std::to_string(ril_config.prefixlen());
++      cfg.gateway = ril_config.gateway();
++      cfg.dns = ril_config.dns();
++      return cfg;
++    }
    }
 -  const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
 -  return ril_config.ipaddr() + "/" + std::to_string(ril_config.prefixlen());
 -};
-+  return "10.0.2.15/24";
-+}
  
- std::string DeviceConfig::ril_gateway() {
-+  if (!cuttlefish::CuttlefishConfig::Get()) {
-+      std::string ifname = android::base::GetProperty("ro.boot.radio_ifname", "rmnet0");
-+      std::string gw;
-+      if (probe_interface_ipv4(ifname, nullptr, nullptr, &gw) && !gw.empty()) {
-+          return gw;
-+      }
-+      return android::base::GetProperty("ro.boot.radio_gw", "10.10.10.1");
-+  }
-   auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
+-std::string DeviceConfig::ril_gateway() {
+-  auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
 -  if (!device_config_helper) {
 -      return "10.0.2.2";
-+  if (device_config_helper) {
-+    const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
-+    return ril_config.gateway();
++  const std::vector<std::string> config_paths = {
++      "/data/vendor/modem_simulator/cellular_network.json",
++      "/data/vendor/modem/cellular_network.json"
++  };
++
++  std::string found_file = "";
++  for (const auto& path : config_paths) {
++    std::ifstream f(path);
++    if (f.good()) {
++      found_file = path;
++      break;
++    }
++  }
++
++  if (found_file.empty()) {
++    cfg.enabled = false;
++    cfg.ifname = android::base::GetProperty("ro.boot.radio_ifname", "rmnet0");
++    return cfg;
++  }
++
++  std::ifstream ifs(found_file);
++  Json::CharReaderBuilder builder;
++  Json::Value root;
++  std::string errs;
++  if (!Json::parseFromStream(builder, ifs, &root, &errs)) {
++    LOG(ERROR) << "Failed to parse cellular config " << found_file << ": " << errs;
++    cfg.enabled = false;
++    return cfg;
++  }
++
++  cfg.ifname = root.get("interface", "rmnet0").asString();
++  cfg.enabled = root.get("enabled", false).asBool();
++  cfg.ip_and_prefix = root.get("ipv4", "").asString();
++  cfg.gateway = root.get("gateway", "").asString();
++
++  if (root.isMember("dns")) {
++    if (root["dns"].isArray()) {
++      std::string dns_str;
++      for (const auto& item : root["dns"]) {
++        if (!dns_str.empty()) dns_str += " ";
++        dns_str += item.asString();
++      }
++      cfg.dns = dns_str;
++    } else if (root["dns"].isString()) {
++      cfg.dns = root["dns"].asString();
++    }
++  }
++
++  if (cfg.enabled && (cfg.ip_and_prefix.empty() || cfg.ip_and_prefix.find('/') == std::string::npos)) {
++    LOG(WARNING) << "Cellular enabled but invalid ipv4: " << cfg.ip_and_prefix;
++    cfg.enabled = false;
++  }
++
++  return cfg;
++}
++
++bool DeviceConfig::VerifyInterfaceAndRoute(const std::string& ifname,
++                                           const std::string& expected_ip,
++                                           const std::string& /*expected_gw*/) {
++  if (ifname.empty()) return false;
++
++  struct ifaddrs* ifaddr = nullptr;
++  if (getifaddrs(&ifaddr) == -1 || !ifaddr) {
++    return false;
++  }
++
++  bool iface_up = false;
++  bool ip_found = false;
++  std::string parsed_ip = expected_ip;
++  size_t slash = parsed_ip.find('/');
++  if (slash != std::string::npos) {
++    parsed_ip = parsed_ip.substr(0, slash);
++  }
++
++  for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
++    if (!ifa->ifa_name || ifname != ifa->ifa_name) continue;
++    if ((ifa->ifa_flags & IFF_UP) && (ifa->ifa_flags & IFF_RUNNING)) {
++      iface_up = true;
++    }
++    if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET) {
++      char ip_buf[INET_ADDRSTRLEN] = {0};
++      auto* sa = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
++      inet_ntop(AF_INET, &(sa->sin_addr), ip_buf, sizeof(ip_buf));
++      if (parsed_ip.empty() || parsed_ip == ip_buf) {
++        ip_found = true;
++      }
++    }
    }
 -  const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
 -  return ril_config.gateway();
-+  return "10.0.2.2";
++  freeifaddrs(ifaddr);
++
++  return iface_up && ip_found;
++}
++
++bool DeviceConfig::is_data_enabled() {
++  auto cfg = ReadCellularConfig();
++  if (!cfg.enabled) return false;
++  return VerifyInterfaceAndRoute(cfg.ifname, cfg.ip_and_prefix, cfg.gateway);
++}
++
++std::string DeviceConfig::ril_ifname() {
++  auto cfg = ReadCellularConfig();
++  return cfg.ifname.empty() ? "rmnet0" : cfg.ifname;
++}
++
++std::string DeviceConfig::ril_address_and_prefix() {
++  auto cfg = ReadCellularConfig();
++  if (!cfg.enabled) return "";
++  return cfg.ip_and_prefix;
++}
++
++std::string DeviceConfig::ril_gateway() {
++  auto cfg = ReadCellularConfig();
++  if (!cfg.enabled) return "";
++  return cfg.gateway;
  }
  
  std::string DeviceConfig::ril_dns() {
-+  if (!cuttlefish::CuttlefishConfig::Get()) {
-+      std::string dns = android::base::GetProperty("ro.boot.radio_dns", "");
-+      if (!dns.empty()) return dns;
-+      return "10.10.10.1 8.8.8.8";
-+  }
-   auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
+-  auto device_config_helper = cuttlefish::DeviceConfigHelper::Get();
 -  if (!device_config_helper) {
 -      return "8.8.8.8";
-+  if (device_config_helper) {
-+    const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
-+    return ril_config.dns();
-   }
+-  }
 -  const auto& ril_config = device_config_helper->GetDeviceConfig().ril_config();
 -  return ril_config.dns();
-+  return "8.8.8.8";
++  auto cfg = ReadCellularConfig();
++  if (!cfg.enabled) return "";
++  return cfg.dns;
  }
  
  std::ifstream DeviceConfig::open_ifstream_crossplat(const char* filename) {
@@ -269,6 +443,525 @@ index 941a8b4..3fc4441 100644
      } else {
        // Ignore errors here
        LOG(ERROR) << "Select call returned error : " << strerror(errno);
+diff --git a/host/commands/modem_simulator/data_service.cpp b/host/commands/modem_simulator/data_service.cpp
+index 1e11e69..1df36d4 100644
+--- a/host/commands/modem_simulator/data_service.cpp
++++ b/host/commands/modem_simulator/data_service.cpp
+@@ -1,21 +1,27 @@
+-//
+-// Copyright (C) 2020 The Android Open Source Project
+-//
+-// Licensed under the Apache License, Version 2.0 (the "License");
+-// you may not use this file except in compliance with the License.
+-// You may obtain a copy of the License at
+-//
+-//      http://www.apache.org/licenses/LICENSE-2.0
+-//
+-// Unless required by applicable law or agreed to in writing, software
+-// distributed under the License is distributed on an "AS IS" BASIS,
+-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-// See the License for the specific language governing permissions and
+-// limitations under the License.
++/*
++ * Copyright (C) 2020 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the License);
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an AS IS BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
+ 
+ #include "host/commands/modem_simulator/data_service.h"
+ 
++#include <android-base/logging.h>
+ #include <android-base/strings.h>
++#include <linux/rtnetlink.h>
++#include <poll.h>
++#include <sys/socket.h>
++#include <unistd.h>
+ 
+ #include "host/commands/modem_simulator/device_config.h"
+ 
+@@ -28,6 +34,13 @@ DataService::DataService(int32_t service_id, ChannelMonitor* channel_monitor,
+   InitializeServiceState();
+ }
+ 
++DataService::~DataService() {
++  stop_net_monitor_ = true;
++  if (net_monitor_thread_.joinable()) {
++    net_monitor_thread_.join();
++  }
++}
++
+ std::vector<CommandHandler> DataService::InitializeCommandHandlers() {
+   std::vector<CommandHandler> command_handlers = {
+       CommandHandler("+CGACT=",
+@@ -71,37 +84,126 @@ std::vector<CommandHandler> DataService::InitializeCommandHandlers() {
+                        this->HandleReadDynamicParam(client, cmd);
+                      }),
+   };
+-  return (command_handlers);
++  return command_handlers;
+ }
+ 
+ void DataService::InitializeServiceState() {
+-  // Initialize data connection config
++  stop_net_monitor_ = false;
++  net_monitor_thread_ = std::thread(&DataService::MonitorNetworkLoop, this);
++}
++
++void DataService::MonitorNetworkLoop() {
++  int nl_fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
++  if (nl_fd >= 0) {
++    struct sockaddr_nl sa;
++    memset(&sa, 0, sizeof(sa));
++    sa.nl_family = AF_NETLINK;
++    sa.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR;
++    if (bind(nl_fd, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa)) < 0) {
++      LOG(WARNING) << "Failed to bind netlink socket for data service observer";
++    }
++  }
++
++  bool last_ready = cuttlefish::modem::DeviceConfig::is_data_enabled();
++  LOG(INFO) << "DataService Network Observer initialized, initial ready=" << last_ready;
++
++  while (!stop_net_monitor_) {
++    if (nl_fd >= 0) {
++      struct pollfd pfd;
++      pfd.fd = nl_fd;
++      pfd.events = POLLIN;
++      pfd.revents = 0;
++      int ret = poll(&pfd, 1, 2000);  // 2 seconds timeout or event
++      if (ret > 0 && (pfd.revents & POLLIN)) {
++        char buf[4096];
++        while (recv(nl_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0) {}
++      }
++    } else {
++      std::this_thread::sleep_for(std::chrono::seconds(2));
++    }
++
++    if (stop_net_monitor_) break;
++
++    bool current_ready = cuttlefish::modem::DeviceConfig::is_data_enabled();
++    if (last_ready && !current_ready) {
++      LOG(INFO) << "Cellular data became unavailable, deactivating calls";
++      bool had_active = false;
++      for (auto& iter : pdp_context_) {
++        if (iter.state == PDPContext::ACTIVE) {
++          iter.state = PDPContext::NO_ACTIVE;
++          had_active = true;
++        }
++      }
++      if (had_active) {
++        SendUnsolicitedCommand("+CGEV: ME DEACT \"IP\", 1");
++      }
++      last_ready = false;
++    } else if (!last_ready && current_ready) {
++      LOG(INFO) << "Cellular data became available, notifying RIL";
++      SendUnsolicitedCommand("+CGEV: NW ACT \"IP\", 1");
++      last_ready = true;
++    }
++  }
++
++  if (nl_fd >= 0) {
++    close(nl_fd);
++  }
+ }
+ 
+ /**
+- * AT+CGACT
+- *   The execution command is used to activate or deactivate the specified PDP
+- * context(s).
+- *
+- * Command                            Possible response(s)
+- * +CGACT=[<state>[,<cid>              OK
+- *        [,<cid>[,...]]]]             +CME ERROR: <err>
+- * +CGACT?                             [+CGACT: <cid>,<state>]
+- *                                     [<CR><LF>+CGACT: <cid>,<state>[...]]
+- * <state>: integer type; indicates the state of PDP context activation.
+- *       0: deactivated
+- *       1: activated
+- * <cid>: (PDP Context Identifier) integer(1~15), specifies the PDP context ID.
+- *
+- * see RIL_REQUEST_SETUP_DATA_CALL in RIL
++ * AT+CGACT=[<state>[,<cid>]]
+  */
+ void DataService::HandleActivateDataCall(const Client& client,
+-                                         const std::string& /*command*/) {
++                                         const std::string& command) {
++  CommandParser cmd(command);
++  cmd.SkipPrefix();
++  int state = cmd.GetNextInt();
++  int cid = -1;
++  if (!cmd->empty()) {
++    cmd.SkipComma();
++    cid = cmd.GetNextInt();
++  }
++
++  if (state == 0) {
++    // User or Android Framework disabled mobile data
++    for (auto& iter : pdp_context_) {
++      if (cid == -1 || iter.cid == cid) {
++        iter.state = PDPContext::NO_ACTIVE;
++      }
++    }
++    client.SendCommandResponse("OK");
++    return;
++  }
++
++  // Activation requested
++  if (!cuttlefish::modem::DeviceConfig::is_data_enabled()) {
++    LOG(WARNING) << "Data call activation rejected: cellular network unavailable";
++    client.SendCommandResponse("+CME ERROR: 14");
++    return;
++  }
++
++  auto cfg = cuttlefish::modem::DeviceConfig::ReadCellularConfig();
++  bool found = false;
++  for (auto& iter : pdp_context_) {
++    if (cid == -1 || iter.cid == cid) {
++      iter.state = PDPContext::ACTIVE;
++      iter.addresses = cfg.ip_and_prefix;
++      iter.gateways = cfg.gateway;
++      iter.dnses = cfg.dns;
++      found = true;
++    }
++  }
++
++  if (!found && cid != -1) {
++    PDPContext ctx = {cid, PDPContext::ACTIVE, "IP", "", cfg.ip_and_prefix, cfg.dns, cfg.gateway};
++    pdp_context_.push_back(ctx);
++  }
++
+   client.SendCommandResponse("OK");
+ }
+ 
+ /**
+- * see AT+CGACT
++ * AT+CGACT?
+  */
+ void DataService::HandleQueryDataCallList(const Client& client) {
+   std::vector<std::string> responses;
+@@ -120,31 +222,7 @@ void DataService::HandleQueryDataCallList(const Client& client) {
+ }
+ 
+ /**
+- * AT+CGDCONT
+- *   The set command specifies PDP context parameter values for a PDP context
+- * identified by the (local) context identification parameter, <cid>.
+- *
+- * Command                            Possible response(s)
+- * +CGDCONT=[<cid>[,<PDP_type>[,<APN>  OK
+- * [,<PDP_addr>[,<d_comp> [,<h_comp>]  +CME ERROR: <err>
+- * ]]]]]
+- * +CGDCONT?                           +CGDCONT: <cid>,<pdp_type>,<APN>,
+- *                                     <pdp_addr>,<d_comp>,<h_comp><CR><LF>
+- *                                     [+CGDCONT: <cid>,<pdp_type>,<APN>,
+- *                                     <pdp_addr>,<d_comp>,<h_comp><CR><LF>[...]]
+- *                                     OK
+- * <cid>: see AT+CGACT
+- * <PDP_type>: string type; specifies the type of packet data protocol.
+- *             Value: X.25, IP, IPV6, IPV4V6, OSPIH, PPP, Non-IP,Ethernet
+- * <APN>: string type; a logical name that is used to select the GGSN or the
+- *        external packet data network.If the value is null or omitted, then
+- *        the subscription value will be requested
+- * <PDP_addr>: string type; identifies the MT in the address space applicable
+- *             to the PDP
+- * <d_comp>: integer type; controls PDP data compression
+- * <h_comp>: integer type; controls PDP header compression
+- *
+- * see RIL_REQUEST_SETUP_DATA_CALL in RIL
++ * AT+CGDCONT=[<cid>[,<PDP_type>[,<APN>...]]]
+  */
+ void DataService::HandlePDPContext(const Client& client,
+                                    const std::string& command) {
+@@ -155,19 +233,19 @@ void DataService::HandlePDPContext(const Client& client,
+   std::string ip_type(cmd.GetNextStr(','));
+   std::string apn(cmd.GetNextStr(','));
+ 
+-  auto address = cuttlefish::modem::DeviceConfig::ril_address_and_prefix();
+-  auto dnses = cuttlefish::modem::DeviceConfig::ril_dns();
+-  auto gateways = cuttlefish::modem::DeviceConfig::ril_gateway();
+-
+-  PDPContext pdp_context = {cid,
+-                            PDPContext::ACTIVE,
+-                            ip_type,  // IPV4 or IPV6 or IPV4V6
+-                            apn,
+-                            address,
+-                            dnses,
+-                            gateways};
++  bool ready = cuttlefish::modem::DeviceConfig::is_data_enabled();
++  auto cfg = cuttlefish::modem::DeviceConfig::ReadCellularConfig();
++
++  PDPContext pdp_context = {
++      cid,
++      ready ? PDPContext::ACTIVE : PDPContext::NO_ACTIVE,
++      ip_type,
++      apn,
++      ready ? cfg.ip_and_prefix : "",
++      ready ? cfg.dns : "",
++      ready ? cfg.gateway : ""
++  };
+ 
+-  // check cid
+   auto iter = pdp_context_.begin();
+   for (; iter != pdp_context_.end(); ++iter) {
+     if (pdp_context.cid == iter->cid) {
+@@ -184,17 +262,21 @@ void DataService::HandlePDPContext(const Client& client,
+ }
+ 
+ /**
+- * see AT+CGDCONT above
++ * AT+CGDCONT?
+  */
+ void DataService::HandleQueryPDPContextList(const Client& client) {
+   std::vector<std::string> responses;
+ 
+   std::stringstream ss;
+-  for (auto it = pdp_context_.begin(); it != pdp_context_.end(); ++it) {
+-    std::stringstream ss;
+-    ss << "+CGDCONT: " << it->cid << "," << it->conn_types << ","
+-       << it->apn << "," << it->addresses << ",0,0";
++  for (auto iter = pdp_context_.begin(); iter != pdp_context_.end(); ++iter) {
++    ss.clear();
++    ss << "+CGDCONT: "
++       << iter->cid << ","
++       << "\"" << iter->conn_types << "\","
++       << "\"" << iter->apn << "\","
++       << "\"" << iter->addresses << "\",0,0,0,0";
+     responses.push_back(ss.str());
++    ss.str("");
+   }
+   responses.push_back("OK");
+   client.SendCommandResponse(responses);
+@@ -202,21 +284,6 @@ void DataService::HandleQueryPDPContextList(const Client& client) {
+ 
+ /**
+  * AT+CGDATA
+- *   The execution command causes the MT to perform whatever actions are
+- * necessary to establish communication between the TE and the network using
+- * one or more Packet Domain PDP types.
+- *
+- * Command                            Possible response(s)
+- * +CGDATA[=<L2P>[,[,<cid>             CONNECT
+- *          [,...]]]]                  ERROR
+- *                                     +CME ERROR: <err>
+- *
+- * <L2P>: string type; indicates the layer 2 protocol to be used between the
+- *        TE and MT NULL  none, for PDP type OSP:IHOSS (Obsolete)
+- *        value: PPP, PAD, X25, M-xxxx
+- * <cid>: see AT+CGACT
+- *
+- * see RIL_REQUEST_SETUP_DATA_CALL in RIL
+  */
+ void DataService::HandleEnterDataState(const Client& client,
+                                        const std::string& command) {
+@@ -227,7 +294,6 @@ void DataService::HandleEnterDataState(const Client& client,
+   cmd.SkipComma();
+   int cid = cmd.GetNextInt();
+ 
+-  // Check cid
+   auto iter = pdp_context_.begin();
+   for (; iter != pdp_context_.end(); ++iter) {
+     if (cid == iter->cid && iter->state == PDPContext::ACTIVE) {
+@@ -244,40 +310,17 @@ void DataService::HandleEnterDataState(const Client& client,
+ }
+ 
+ /**
+- * AT+CGCONTRDP
+- *   The execution command returns the relevant information for an active non
+- * secondary PDP context with the context identifier <cid>.
+- *
+- * Command                            Possible response(s)
+- * +CGCONTRDP[=<cid>]                 [+CGCONTRDP: <cid>,<bearer_id>,<apn>
+- *                                    [,<local_addr and subnet_mask>[,<gw_addr>
+- *                                    [,<DNS_prim_addr>[<DNS_sec_addr>[...]]]]]]
+- *                                    [<CR><LF>+CGCONTRDP: <cid>,<bearer_id>,<apn>
+- *                                    [,<local_addr and subnet_mask>[,<gw_addr>
+- *                                    [,<DNS_prim_addr>[<DNS_sec_addr>[...]]]]]]
+- *
+- * <cid>: see AT+CGACT
+- * <bearer_id>: integer type; identifies the bearer, i.e. the EPS bearer and
+- *              the NSAPI.
+- * <local_addr and subnet_mask>: string type; shows the IP address and subnet
+- *                               mask of the MT.
+- * <gw_addr>: string type; shows the Gateway Address of the MT. The string is
+- *            given as dot-separated numeric (0-255) parameters.
+- * <DNS_prim_addr>: string type; shows the IP address of the primary DNS server.
+- * <DNS_sec_addr>: string type; shows the IP address of the secondary DNS server.
+- *
+- *
+- * see RIL_REQUEST_SETUP_DATA_CALL in RIL
++ * AT+CGCONTRDP[=<cid>]
+  */
+ void DataService::HandleReadDynamicParam(const Client& client,
+                                          const std::string& command) {
+   std::vector<std::string> responses;
+ 
+   CommandParser cmd(command);
+-  cmd.SkipPrefix(); /* skip prefix AT+CGCONTRDP= */
++  cmd.SkipPrefix();
+ 
+   int cid = cmd.GetNextInt();
+-  auto iter = pdp_context_.begin();  // Check cid
++  auto iter = pdp_context_.begin();
+   for (; iter != pdp_context_.end(); ++iter) {
+     if (cid == iter->cid && iter->state == PDPContext::ACTIVE) {
+       break;
+@@ -285,7 +328,7 @@ void DataService::HandleReadDynamicParam(const Client& client,
+   }
+ 
+   if (iter == pdp_context_.end()) {
+-    responses.push_back(kCmeErrorInvalidIndex);  // number
++    responses.push_back(kCmeErrorInvalidIndex);
+   } else {
+     std::stringstream ss;
+     ss << "+CGCONTRDP: "
+@@ -333,7 +376,6 @@ void DataService::updatePhysicalChannelconfigs(int modem_tech, int freq,
+     }
+   }
+ 
+-  // call again after 1 sec delay
+   count--;
+   thread_looper_->Post(
+       makeSafeCallback(this, &DataService::updatePhysicalChannelconfigs,
+diff --git a/host/commands/modem_simulator/data_service.h b/host/commands/modem_simulator/data_service.h
+index 2da2d1c..8e368e6 100644
+--- a/host/commands/modem_simulator/data_service.h
++++ b/host/commands/modem_simulator/data_service.h
+@@ -1,20 +1,23 @@
+-//
+-// Copyright (C) 2020 The Android Open Source Project
+-//
+-// Licensed under the Apache License, Version 2.0 (the "License");
+-// you may not use this file except in compliance with the License.
+-// You may obtain a copy of the License at
+-//
+-//      http://www.apache.org/licenses/LICENSE-2.0
+-//
+-// Unless required by applicable law or agreed to in writing, software
+-// distributed under the License is distributed on an "AS IS" BASIS,
+-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-// See the License for the specific language governing permissions and
+-// limitations under the License.
++/*
++ * Copyright (C) 2020 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the License);
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an AS IS BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
+ 
+ #pragma once
+ 
++#include <atomic>
++#include <thread>
+ #include "host/commands/modem_simulator/modem_service.h"
+ 
+ namespace cuttlefish {
+@@ -23,7 +26,7 @@ class DataService : public ModemService, public std::enable_shared_from_this<Dat
+  public:
+   DataService(int32_t service_id, ChannelMonitor* channel_monitor,
+               ThreadLooper* thread_looper);
+-  ~DataService() = default;
++  ~DataService();
+ 
+   DataService(const DataService &) = delete;
+   DataService &operator=(const DataService &) = delete;
+@@ -45,6 +48,7 @@ class DataService : public ModemService, public std::enable_shared_from_this<Dat
+                                 int id);
+   void updatePhysicalChannelconfigs(int modem_tech, int freq,
+                                     int cellBandwidthDownlink, int count);
++  void MonitorNetworkLoop();
+ 
+   struct PDPContext {
+     enum CidState {ACTIVE, NO_ACTIVE};
+@@ -58,6 +62,8 @@ class DataService : public ModemService, public std::enable_shared_from_this<Dat
+     std::string gateways;
+   };
+   std::vector<PDPContext> pdp_context_;
++  std::thread net_monitor_thread_;
++  std::atomic<bool> stop_net_monitor_{false};
+ };
+ 
+ }  // namespace cuttlefish
+diff --git a/host/commands/modem_simulator/device_config.h b/host/commands/modem_simulator/device_config.h
+index c357356..d45d98d 100644
+--- a/host/commands/modem_simulator/device_config.h
++++ b/host/commands/modem_simulator/device_config.h
+@@ -1,14 +1,14 @@
+ /*
+  * Copyright (C) 2020 The Android Open Source Project
+  *
+- * Licensed under the Apache License, Version 2.0 (the "License");
++ * Licensed under the Apache License, Version 2.0 (the License);
+  * you may not use this file except in compliance with the License.
+  * You may obtain a copy of the License at
+  *
+  *      http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
++ * distributed under the License is distributed on an AS IS BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+@@ -18,23 +18,36 @@
+ 
+ #include <string>
+ #include <fstream>
+- 
+-// this file provide a few device (cvd or emulator) specific hooks for
+-// modem-simulator
++#include <vector>
+ 
+ namespace cuttlefish {
+ namespace modem {
+ 
++struct CellularNetworkConfig {
++  std::string ifname = "rmnet0";
++  bool enabled = false;
++  std::string ip_and_prefix = "";
++  std::string gateway = "";
++  std::string dns = "";
++};
++
+ class DeviceConfig {
+  public:
+   static int host_id();
+   static std::string PerInstancePath(const char* file_name);
+   static std::string DefaultHostArtifactsPath(const std::string& file);
++  static bool is_data_enabled();
++  static std::string ril_ifname();
+   static std::string ril_address_and_prefix();
+   static std::string ril_gateway();
+   static std::string ril_dns();
++  static CellularNetworkConfig ReadCellularConfig();
++  static bool VerifyInterfaceAndRoute(const std::string& ifname,
++                                      const std::string& expected_ip,
++                                      const std::string& expected_gw);
+   static std::ifstream open_ifstream_crossplat(const char* filename);
+-  static std::ofstream open_ofstream_crossplat(const char* filename, std::ios_base::openmode mode = std::ios_base::out);
++  static std::ofstream open_ofstream_crossplat(const char* filename,
++                                               std::ios_base::openmode mode = std::ios_base::out);
+ };
+ 
+ }  // namespace modem
 diff --git a/host/commands/modem_simulator/main.cpp b/host/commands/modem_simulator/main.cpp
 index 41ab6ce..35b1bf3 100644
 --- a/host/commands/modem_simulator/main.cpp
@@ -338,6 +1031,3 @@ index 41ab6ce..35b1bf3 100644
  
    auto monitor_socket = cuttlefish::SharedFD::SocketLocalServer(
        monitor_socket_name.c_str(), true, SOCK_STREAM, 0666);
--- 
-2.34.1
-

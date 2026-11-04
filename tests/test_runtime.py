@@ -281,6 +281,35 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(version['api'], 1)
         self.assertEqual(version['version'], (ROOT / 'deploy/VERSION').read_text().strip())
 
+    def test_cellular_dhcp_is_strictly_rejected(self):
+        conf = "unprivileged: 1\nnet0: name=eth0,bridge=vmbr0,ip=192.168.1.10/24,gw=192.168.1.1\nnet1: name=rmnet0,bridge=vmbr0,ip=dhcp\n"
+        parser, _ = runtime.arguments([])
+        args = parser.parse_args(["200"])
+        with self.assertRaises(ValueError) as ctx:
+            runtime.render(conf, args)
+        self.assertIn("does not support DHCP", str(ctx.exception))
+
+    def test_cellular_static_ipv4_and_idmap_rendered_idempotently(self):
+        conf = "unprivileged: 1\nnet0: name=eth0,bridge=vmbr0,ip=192.168.1.10/24,gw=192.168.1.1\nnet1: name=rmnet0,bridge=vmbr1,ip=10.10.10.250/24,gw=10.10.10.1\n"
+        parser, _ = runtime.arguments([])
+        args = parser.parse_args(["200", "--cellular-dns", "10.10.10.1 8.8.8.8"])
+        rendered1 = runtime.render(conf, args)
+        self.assertIn("lxc.idmap: u 0 100000 1000000", rendered1)
+        self.assertIn("lxc.idmap: g 0 100000 1000000", rendered1)
+        self.assertIn("ro.boot.radio_ifname=rmnet0", rendered1)
+        self.assertIn("ro.boot.radio_dns=10.10.10.1 8.8.8.8", rendered1)
+        # Verify idempotency
+        rendered2 = runtime.render(rendered1, args)
+        self.assertEqual(rendered1, rendered2)
+
+    def test_cellular_rejects_invalid_ip_or_gateway(self):
+        parser, _ = runtime.arguments([])
+        args = parser.parse_args(["200"])
+        with self.assertRaises(ValueError):
+            runtime.render("net0: name=eth0,ip=192.168.1.10/24\nnet1: name=rmnet0,ip=999.999.999.999/24\n", args)
+        with self.assertRaises(ValueError):
+            runtime.render("net0: name=eth0,ip=192.168.1.10/24\nnet1: name=rmnet0,ip=10.10.10.250/24,gw=invalid-gw\n", args)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -58,29 +58,52 @@ if [ "$PHASE" = "post-start" ]; then
             fi
             echo "CT $VMID: network prepared (DHCP lifecycle belongs to Android; no host DHCP client)" >> /tmp/pve-hook.log
         fi
-        for net_idx in $(seq 1 9); do
-            NET_LINE=$(sed '/^\[/,$d' "$CONF" | grep "^net${net_idx}:" | head -n 1 || true)
-            [ -n "$NET_LINE" ] || continue
-            DEV_NAME=$(echo "$NET_LINE" | grep -o 'name=[^, ]*' | cut -d= -f2 || true)
-            [ -n "$DEV_NAME" ] || DEV_NAME="eth${net_idx}"
-            DEV_IP=$(echo "$NET_LINE" | grep -o 'ip=[^, ]*' | cut -d= -f2 || true)
-            DEV_GW=$(echo "$NET_LINE" | grep -o 'gw=[^, ]*' | cut -d= -f2 || true)
+        # 仅处理明确指定的蜂窝接口 (默认 rmnet0)，不再接管全部 net1-net9
+        CELL_LINE=$(sed '/^\[/,$d' "$CONF" | grep -E 'name=rmnet0|name=rmnet' | head -n 1 || true)
+        MODEM_CONF_DIR="/proc/$PID/root/data/vendor/modem_simulator"
+        mkdir -p "$MODEM_CONF_DIR" 2>/dev/null || true
+        if [ -n "$CELL_LINE" ]; then
+            DEV_NAME=$(echo "$CELL_LINE" | grep -o 'name=[^, ]*' | cut -d= -f2 || true)
+            [ -n "$DEV_NAME" ] || DEV_NAME="rmnet0"
+            DEV_IP=$(echo "$CELL_LINE" | grep -o 'ip=[^, ]*' | cut -d= -f2 || true)
+            DEV_GW=$(echo "$CELL_LINE" | grep -o 'gw=[^, ]*' | cut -d= -f2 || true)
 
-            nsenter -t "$PID" -n ip link set "$DEV_NAME" up >> /tmp/pve-hook.log 2>&1 || true
-            if [[ "$DEV_IP" == */* ]]; then
-                nsenter -t "$PID" -n ip addr replace "$DEV_IP" dev "$DEV_NAME" >> /tmp/pve-hook.log 2>&1 || true
-                DEV_IP_ADDR="${DEV_IP%%/*}"
-                TABLE_ID=$((100 + net_idx))
-                if [ -n "$DEV_GW" ]; then
-                    nsenter -t "$PID" -n ip route replace default via "$DEV_GW" dev "$DEV_NAME" table "$TABLE_ID" >> /tmp/pve-hook.log 2>&1 || true
-                fi
-                if ! nsenter -t "$PID" -n ip rule show | grep -q "lookup $TABLE_ID"; then
-                    nsenter -t "$PID" -n ip rule add pref 999 oif "$DEV_NAME" table "$TABLE_ID" >> /tmp/pve-hook.log 2>&1 || true
-                    nsenter -t "$PID" -n ip rule add pref 1000 from "$DEV_IP_ADDR" table "$TABLE_ID" >> /tmp/pve-hook.log 2>&1 || true
-                fi
+            if [ "$DEV_IP" = "dhcp" ]; then
+                echo "[ERROR] CT $VMID: Cellular interface $DEV_NAME does not support DHCP yet" >> /tmp/pve-hook.log
+                echo "CT $VMID: Cellular interface $DEV_NAME does not support DHCP yet" >&2
+                exit 1
             fi
-            echo "CT $VMID: secondary interface $DEV_NAME ($DEV_IP) prepared" >> /tmp/pve-hook.log
-        done
+
+            if [[ "$DEV_IP" == */* ]]; then
+                nsenter -t "$PID" -n ip link set "$DEV_NAME" up >> /tmp/pve-hook.log 2>&1
+                nsenter -t "$PID" -n ip addr replace "$DEV_IP" dev "$DEV_NAME" >> /tmp/pve-hook.log 2>&1
+                if [ -n "$DEV_GW" ]; then
+                    nsenter -t "$PID" -n ip route replace default via "$DEV_GW" dev "$DEV_NAME" table 101 >> /tmp/pve-hook.log 2>&1
+                fi
+                cat << EOF_CELL > "${MODEM_CONF_DIR}/cellular_network.json"
+{
+  "interface": "${DEV_NAME}",
+  "enabled": true,
+  "ipv4": "${DEV_IP}",
+  "gateway": "${DEV_GW}",
+  "dns": ["${DEV_GW}", "8.8.8.8"]
+}
+EOF_CELL
+                chmod 644 "${MODEM_CONF_DIR}/cellular_network.json" 2>/dev/null || true
+                echo "CT $VMID: cellular interface $DEV_NAME ($DEV_IP) prepared (table 101 route ready; netd owns routing policy)" >> /tmp/pve-hook.log
+            fi
+        else
+            cat << EOF_CELL > "${MODEM_CONF_DIR}/cellular_network.json"
+{
+  "interface": "rmnet0",
+  "enabled": false,
+  "ipv4": "",
+  "gateway": "",
+  "dns": []
+}
+EOF_CELL
+            chmod 644 "${MODEM_CONF_DIR}/cellular_network.json" 2>/dev/null || true
+        fi
     fi
 fi
 

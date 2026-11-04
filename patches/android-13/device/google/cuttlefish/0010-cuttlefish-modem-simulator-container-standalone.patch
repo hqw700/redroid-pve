@@ -1,5 +1,5 @@
 diff --git a/guest/hals/ril/reference-ril/reference-ril.c b/guest/hals/ril/reference-ril/reference-ril.c
-index f3d01e4..40c90c2 100644
+index f3d01e4..ea838a2 100644
 --- a/guest/hals/ril/reference-ril/reference-ril.c
 +++ b/guest/hals/ril/reference-ril/reference-ril.c
 @@ -795,10 +795,20 @@ static void requestCallSelection(
@@ -24,7 +24,23 @@ index f3d01e4..40c90c2 100644
  }
  
  static void requestOrSendDataCallList(int cid, RIL_Token *t)
-@@ -965,76 +975,74 @@ static void requestOrSendDataCallList(int cid, RIL_Token *t)
+@@ -888,10 +898,13 @@ static void requestOrSendDataCallList(int cid, RIL_Token *t)
+         if (err < 0)
+             goto error;
+ 
+-        if (cid != ncid)
++        if (cid != -1 && cid != ncid)
+             continue;
+ 
+-        i = ncid - 1;
++        // Context IDs are not array offsets (they may be sparse after reconnect).
++        for (i = 0; i < n && responses[i].cid != ncid; i++) {}
++        if (i == n)
++            continue;
+         // Assume no error
+         responses[i].status = 0;
+ 
+@@ -965,76 +978,77 @@ static void requestOrSendDataCallList(int cid, RIL_Token *t)
              }
              responses[i].mtu = DEFAULT_MTU;
          } else {
@@ -72,6 +88,7 @@ index f3d01e4..40c90c2 100644
 +                char *gw = NULL, *dns = NULL;
 +                if (at_tok_start(&input) >= 0 &&
 +                    at_tok_nextint(&input, &ncid) >= 0 &&
++                    ncid == responses[i].cid &&
 +                    at_tok_nextint(&input, &skip) >= 0 &&
 +                    at_tok_nextstr(&input, &sskip) >= 0 &&
 +                    at_tok_nextstr(&input, &sskip) >= 0 &&
@@ -88,8 +105,10 @@ index f3d01e4..40c90c2 100644
 +                        strlcpy(responses[i].dnses, dns, dns_sz);
 +                    }
 +                }
-+                at_response_free(p_dp_resp);
 +            }
++            at_response_free(p_dp_resp);
++            // AT CGACT uses 1 for activated; RIL uses 2 for link up.
++            responses[i].active = 2;
 +        }
      }
  
@@ -444,7 +463,7 @@ index 941a8b4..3fc4441 100644
        // Ignore errors here
        LOG(ERROR) << "Select call returned error : " << strerror(errno);
 diff --git a/host/commands/modem_simulator/data_service.cpp b/host/commands/modem_simulator/data_service.cpp
-index 1e11e69..1df36d4 100644
+index 1e11e69..591ece8 100644
 --- a/host/commands/modem_simulator/data_service.cpp
 +++ b/host/commands/modem_simulator/data_service.cpp
 @@ -1,21 +1,27 @@
@@ -649,6 +668,15 @@ index 1e11e69..1df36d4 100644
   */
  void DataService::HandleQueryDataCallList(const Client& client) {
    std::vector<std::string> responses;
+@@ -110,7 +212,7 @@ void DataService::HandleQueryDataCallList(const Client& client) {
+   for (auto iter = pdp_context_.begin(); iter != pdp_context_.end(); ++iter) {
+     if (iter->state == PDPContext::ACTIVE) {
+       ss.clear();
+-      ss << "+CGACT: " << iter->cid << "," << iter->state;
++      ss << "+CGACT: " << iter->cid << ",1";  // AT activated, not internal enum
+       responses.push_back(ss.str());
+       ss.str("");
+     }
 @@ -120,31 +222,7 @@ void DataService::HandleQueryDataCallList(const Client& client) {
  }
  

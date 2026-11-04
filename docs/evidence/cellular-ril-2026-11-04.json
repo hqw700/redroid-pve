@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-04",
+  "scope": "Component validation on existing privileged CT 214; not a rebuilt template release",
+  "target": "192.168.100.144:5555",
+  "aosp_project": "device/google/cuttlefish",
+  "aosp_head_before": "f28a8f2",
+  "fixes": [
+    "Encode CGACT activated state as 1 rather than internal enum ACTIVE=0",
+    "Resolve sparse CIDs by identity, including full-list queries with cid=-1",
+    "Convert activated AT state to RIL link-up state 2; verify CGCONTRDP CID and free its response on failure"
+  ],
+  "components": {
+    "modem_simulator": "b67112236b9d5389a40cecbed07353c192b4eda63cc786becb96852d67bc02dc",
+    "libcuttlefish-ril-2.so": "5d7bb1fb2c931226bb637aa14041f0b484b60d4fc7f231717ea2bd9ff9266309"
+  },
+  "backup_on_pve_155h": "/root/ct214-ril-backup-20261104",
+  "results": {
+    "cellular_validated": true,
+    "gateway": "10.10.10.1",
+    "dns": [
+      "10.10.10.1",
+      "8.8.8.8"
+    ],
+    "interface_https_status": 200,
+    "interface_https_source": "10.10.10.101",
+    "reconnect_cycles_passed": 3,
+    "unit_tests": 22,
+    "unit_tests_skipped": 1,
+    "shell_syntax": "passed",
+    "patch_forward_reverse_checks": "passed"
+  },
+  "limitations": [
+    "No full system/vendor image build or cold boot validation",
+    "No no-interface startup or interface hotplug validation",
+    "Framework Network-bound Java probe did not produce results; HTTPS checked using host curl in target network namespace bound to rmnet0",
+    "Existing DNS policy, custom interface selection, observer synchronization and ID-map issues are outside this fix"
+  ]
+}
